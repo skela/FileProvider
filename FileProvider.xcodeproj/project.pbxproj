@@ -127,6 +127,7 @@
 		79F5745B1DFDB10B00179ABF /* FileObject.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79F5745A1DFDB10A00179ABF /* FileObject.swift */; };
 		79F5745C1DFDB10B00179ABF /* FileObject.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79F5745A1DFDB10A00179ABF /* FileObject.swift */; };
 		79F5745D1DFDB10B00179ABF /* FileObject.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79F5745A1DFDB10A00179ABF /* FileObject.swift */; };
+		C60205AD1E8B98CD0008228B /* FileObservers.swift in Sources */ = {isa = PBXBuildFile; fileRef = C60205AC1E8B98CD0008228B /* FileObservers.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -185,6 +186,7 @@
 		79BD63C31E2D17880035128C /* OneDriveFileProvide.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = OneDriveFileProvide.swift; sourceTree = "<group>"; };
 		79BD63C41E2D17880035128C /* OneDriveHelper.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = OneDriveHelper.swift; sourceTree = "<group>"; };
 		79F5745A1DFDB10A00179ABF /* FileObject.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = FileObject.swift; sourceTree = "<group>"; };
+		C60205AC1E8B98CD0008228B /* FileObservers.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = FileObservers.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -310,6 +312,7 @@
 				799396971D48C02300086753 /* SMBClient.swift */,
 				799396981D48C02300086753 /* SMBFileProvider.swift */,
 				799396A61D48C02300086753 /* WebDAVFileProvider.swift */,
+				C60205AC1E8B98CD0008228B /* FileObservers.swift */,
 			);
 			path = Sources;
 			sourceTree = "<group>";
@@ -522,6 +525,7 @@
 				799396CB1D48C02300086753 /* SMB2Query.swift in Sources */,
 				799396AA1D48C02300086753 /* DropboxFileProvider.swift in Sources */,
 				79BD638C1E2CC2300035128C /* ExtendedLocalFileProvider.swift in Sources */,
+				C60205AD1E8B98CD0008228B /* FileObservers.swift in Sources */,
 				7924B1B31D89FD6400589DB7 /* SMBClient.swift in Sources */,
 				7924B1A51D89DAE000589DB7 /* Parser.swift in Sources */,
 				799396B01D48C02300086753 /* FileProvider.swift in Sources */,
