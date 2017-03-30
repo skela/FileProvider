@@ -104,6 +104,14 @@ open class FileProviderObservationTask
         self.session = session
         self.changed = changed
     }
+    
+    func fireChanged()
+    {
+        DispatchQueue.main.async
+        {
+            self.changed()
+        }
+    }
 }
 
 class WebDavProviderObservationTask : FileProviderObservationTask
@@ -222,10 +230,7 @@ class WebDavProviderObservationTask : FileProviderObservationTask
             {
                 oldTag = tag
                 
-                DispatchQueue.main.async
-                    {
-                        self.changed()
-                }
+                fireChanged()
             }
             else
             {
@@ -361,10 +366,7 @@ class DropboxProviderObservationTask : FileProviderObservationTask
             cursor = res.cursor
             if res.changes
             {
-                DispatchQueue.main.async
-                    {
-                        self.changed()
-                }
+                fireChanged()
                 
                 if let c = getCursor()
                 {
