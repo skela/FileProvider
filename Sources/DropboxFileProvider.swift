@@ -212,11 +212,6 @@ extension DropboxFileProvider: FileProviderOperations {
         return doOperation(.create(path: path), completionHandler: completionHandler)
     }
     
-    open func create(file fileName: String, at path: String, contents data: Data?, completionHandler: SimpleCompletionHandler) -> OperationHandle? {
-        let filePath = (path as NSString).appendingPathComponent(fileName)
-        return self.writeContents(path: filePath, contents: data ?? Data(), completionHandler: completionHandler)
-    }
-    
     open func moveItem(path: String, to toPath: String, overwrite: Bool, completionHandler: SimpleCompletionHandler) -> OperationHandle? {
         return doOperation(.move(source: path, destination: toPath), completionHandler: completionHandler)
     }
@@ -293,21 +288,23 @@ extension DropboxFileProvider: FileProviderOperations {
         let requestDictionary: [String: AnyObject] = ["path": path as NSString]
         let requestJson = String(jsonDictionary: requestDictionary) ?? ""
         request.setValue(requestJson, forHTTPHeaderField: "Dropbox-API-Arg")
-        let task = session.downloadTask(with: request, completionHandler: { (cacheURL, response, error) in
-            guard let cacheURL = cacheURL, let httpResponse = response as? HTTPURLResponse , httpResponse.statusCode < 300 else {
-                let code = FileProviderHTTPErrorCode(rawValue: (response as? HTTPURLResponse)?.statusCode ?? -1)
+        let task = session.downloadTask(with: request)
+        completionHandlersForTasks[task.taskIdentifier] = completionHandler
+        downloadCompletionHandlersForTasks[task.taskIdentifier] = { tempURL in
+            guard let httpResponse = task.response as? HTTPURLResponse , httpResponse.statusCode < 300 else {
+                let code = FileProviderHTTPErrorCode(rawValue: (task.response as? HTTPURLResponse)?.statusCode ?? -1)
                 let errorData : Data? = nil //Data(contentsOf:cacheURL) // TODO: Figure out how to get error response data for the error description
                 let serverError : FileProviderDropboxError? = code != nil ? FileProviderDropboxError(code: code!, path: path, errorDescription: String(data: errorData ?? Data(), encoding: .utf8)) : nil
-                completionHandler?(serverError ?? error)
+                completionHandler?(serverError)
                 return
             }
             do {
-                try FileManager.default.moveItem(at: cacheURL, to: destURL)
+                try FileManager.default.moveItem(at: tempURL, to: destURL)
                 completionHandler?(nil)
             } catch let e {
                 completionHandler?(e)
             }
-        })
+        }
         task.taskDescription = opType.json
         task.resume()
         return RemoteOperationHandle(operationType: opType, tasks: [task])
@@ -348,13 +345,13 @@ extension DropboxFileProvider: FileProviderReadWrite {
         return RemoteOperationHandle(operationType: opType, tasks: [task])
     }
     
-    public func writeContents(path: String, contents data: Data, atomically: Bool, overwrite: Bool, completionHandler: SimpleCompletionHandler) -> OperationHandle? {
+    public func writeContents(path: String, contents data: Data?, atomically: Bool, overwrite: Bool, completionHandler: SimpleCompletionHandler) -> OperationHandle? {
         let opType = FileOperationType.modify(path: path)
         guard fileOperationDelegate?.fileProvider(self, shouldDoOperation: opType) ?? true == true else {
             return nil
         }
         // FIXME: remove 150MB restriction
-        return upload_simple(path, data: data, overwrite: overwrite, operation: opType, completionHandler: completionHandler)
+        return upload_simple(path, data: data ?? Data(), overwrite: overwrite, operation: opType, completionHandler: completionHandler)
     }
     
     /*
@@ -399,10 +396,10 @@ extension DropboxFileProvider {
      - Parameters:
        - to: path of file, including file/directory name.
        - completionHandler: a closure with result of directory entries or error.
-         `link`: a url returned by Dropbox to share.
-         `attribute`: a `FileObject` containing the attributes of the item.
-         `expiration`: a `Date` object, determines when the public url will expires.
-         `error`: Error returned by Dropbox.
+         - `link`: a url returned by Dropbox to share.
+         - `attribute`: a `FileObject` containing the attributes of the item.
+         - `expiration`: a `Date` object, determines when the public url will expires.
+         - `error`: Error returned by Dropbox.
     */
     open func publicLink(to path: String, completionHandler: @escaping ((_ link: URL?, _ attribute: DropboxFileObject?, _ expiration: Date?, _ error: Error?) -> Void)) {
         let url = URL(string: "files/get_temporary_link", relativeTo: apiURL)!
@@ -442,9 +439,9 @@ extension DropboxFileProvider {
        - remoteURL: a valid remote url to file.
        - to: Destination path of file, including file/directory name.
        - completionHandler: a closure with result of directory entries or error.
-         `jobId`: Job ID returned by Dropbox to monitor the copy/download progress.
-         `attribute`: A `FileObject` containing the attributes of the item.
-         `error`: Error returned by Dropbox.
+         - `jobId`: Job ID returned by Dropbox to monitor the copy/download progress.
+         - `attribute`: A `FileObject` containing the attributes of the item.
+         - `error`: Error returned by Dropbox.
      */
     open func copyItem(remoteURL: URL, to toPath: String, completionHandler: @escaping ((_ jobId: String?, _ attribute: DropboxFileObject?, _ error: Error?) -> Void)) {
         if remoteURL.isFileURL {

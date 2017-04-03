@@ -66,8 +66,8 @@ public protocol FileProviderBasic: class, NSCoding, NSSecureCoding {
      
      - Parameter path: path to target directory. If empty, `currentPath` value will be used.
      - Parameter completionHandler: a closure with result of directory entries or error.
-        `contents`: An array of `FileObject` identifying the the directory entries.
-        `error`: Error returned by system.
+        - `contents`: An array of `FileObject` identifying the the directory entries.
+        - `error`: Error returned by system.
      */
     func contentsOfDirectory(path: String, completionHandler: @escaping ((_ contents: [FileObject], _ error: Error?) -> Void))
     
@@ -78,8 +78,8 @@ public protocol FileProviderBasic: class, NSCoding, NSSecureCoding {
      
      - Parameter path: path to target directory. If empty, `currentPath` value will be used.
      - Parameter completionHandler: a closure with result of directory entries or error.
-        `attributes`: A `FileObject` containing the attributes of the item.
-        `error`: Error returned by system.
+        - `attributes`: A `FileObject` containing the attributes of the item.
+        - `error`: Error returned by system.
      */
     func attributesOfItem(path: String, completionHandler: @escaping ((_ attributes: FileObject?, _ error: Error?) -> Void))
     
@@ -195,7 +195,7 @@ public protocol FileProviderBasicRemote: FileProviderBasic {
     var validatingCache: Bool { get set }
 }
 
-internal extension FileProviderBasicRemote {
+internal extension FileProviderBasicRemote {    
     func returnCachedDate(with request: URLRequest, validatingCache: Bool, completionHandler: @escaping (Data?, URLResponse?, Error?) -> Swift.Void) -> Bool {
         guard let cache = self.cache else { return false }
         if let response = cache.cachedResponse(for: request) {
@@ -260,20 +260,6 @@ public protocol FileProviderOperations: FileProviderBasic {
      */
     @discardableResult
     func create(folder: String, at: String, completionHandler: SimpleCompletionHandler) -> OperationHandle?
-    
-    /**
-     Creates an new file with data passed to method asynchronously. 
-     Returns error via completionHandler if file is already exists.
-     
-     - Parameters:
-       - file: New file name with extension separated by period.
-       - at: Parent path of new file.
-       - data: Data of new files. Pass nil or `Data()` to create empty file.
-       - completionHandler: If an error parameter was provided, a presentable `Error` will be returned.
-     - Returns: An `OperationHandle` to get progress or cancel progress. Doesn't work on `LocalFileProvider`.
-     */
-    @discardableResult
-    func create(file: String, at: String, contents data: Data?, completionHandler: SimpleCompletionHandler) -> OperationHandle?
     
     /**
      Moves a file or directory from `path` to designated path asynchronously.
@@ -349,6 +335,8 @@ public protocol FileProviderOperations: FileProviderBasic {
      Uploads a file from local file url to designated path asynchronously.
      Method will fail if source is not a local url with `file://` scheme.
      
+     - Note: It's safe to assume that this method only works on individual files and **won't** copy folders recursively.
+     
      - Parameters:
        - localFile: a file url to file.
        - to: destination path of file, including file/directory name.
@@ -361,6 +349,8 @@ public protocol FileProviderOperations: FileProviderBasic {
     /**
      Uploads a file from local file url to designated path asynchronously.
      Method will fail if source is not a local url with `file://` scheme.
+     
+     - Note: It's safe to assume that this method only works on individual files and **won't** copy folders recursively.
      
      - Parameters:
        - localFile: a file url to file.
@@ -376,6 +366,8 @@ public protocol FileProviderOperations: FileProviderBasic {
      Download a file from `path` to designated local file url asynchronously.
      Method will fail if destination is not a local url with `file://` scheme.
      
+     - Note: It's safe to assume that this method only works on individual files and **won't** copy folders recursively.
+     
      - Parameters:
        - path: original file or directory path.
        - toLocalURL: destination local url of file, including file/directory name.
@@ -386,7 +378,15 @@ public protocol FileProviderOperations: FileProviderBasic {
     func copyItem(path: String, toLocalURL: URL, completionHandler: SimpleCompletionHandler) -> OperationHandle?
 }
 
-extension FileProviderOperations {
+public extension FileProviderOperations {
+    /// *DEPRECATED:* Use Use FileProviderReadWrite.writeContents(path:, data:, completionHandler:) method instead.
+    @available(*, deprecated, message: "Use FileProviderReadWrite.writeContents(path:, data:, completionHandler:) method instead.")
+    @discardableResult
+    public func create(file: String, at: String, contents data: Data?, completionHandler: SimpleCompletionHandler) -> OperationHandle? {
+        let path = (at as NSString).appendingPathComponent(file)
+        return (self as? FileProviderReadWrite)?.writeContents(path: path, contents: data, completionHandler: completionHandler)
+    }
+    
     @discardableResult
     public func moveItem(path: String, to: String, completionHandler: SimpleCompletionHandler) -> OperationHandle? {
         return self.moveItem(path: path, to: to, overwrite: false, completionHandler: completionHandler)
@@ -412,8 +412,8 @@ public protocol FileProviderReadWrite: FileProviderBasic {
      - Parameters:
        - path: Path of file.
        - completionHandler: a closure with result of file contents or error.
-         `contents`: contents of file in a `Data` object.
-         `error`: Error returned by system.
+         - `contents`: contents of file in a `Data` object.
+         - `error`: Error returned by system.
      - Returns: An `OperationHandle` to get progress or cancel progress. Doesn't work on `LocalFileProvider`.
     */
     @discardableResult
@@ -428,8 +428,8 @@ public protocol FileProviderReadWrite: FileProviderBasic {
        - offset: First byte index which should be read. **Starts from 0.**
        - length: Bytes count of data. Pass `-1` to read until the end of file.
        - completionHandler: a closure with result of file contents or error.
-         `contents`: contents of file in a `Data` object.
-         `error`: Error returned by system.
+         - `contents`: contents of file in a `Data` object.
+         - `error`: Error returned by system.
      - Returns: An `OperationHandle` to get progress or cancel progress. Doesn't work on `LocalFileProvider`.
      */
     @discardableResult
@@ -442,12 +442,12 @@ public protocol FileProviderReadWrite: FileProviderBasic {
      
      - Parameters:
        - path: Path of target file.
-       - contents: Data to be written into file.
+       - contents: Data to be written into file, pass nil to create empty file.
        - completionHandler: If an error parameter was provided, a presentable `Error` will be returned.
      - Returns: An `OperationHandle` to get progress or cancel progress. Doesn't work on `LocalFileProvider`.
      */
     @discardableResult
-    func writeContents(path: String, contents: Data, completionHandler: SimpleCompletionHandler) -> OperationHandle?
+    func writeContents(path: String, contents: Data?, completionHandler: SimpleCompletionHandler) -> OperationHandle?
     
     /**
      Write the contents of the `Data` to a location asynchronously.
@@ -455,13 +455,13 @@ public protocol FileProviderReadWrite: FileProviderBasic {
      
      - Parameters:
        - path: Path of target file.
-       - contents: Data to be written into file.
+       - contents: Data to be written into file, pass nil to create empty file.
        - atomically: data will be written to a temporary file before writing to final location. Default is `false`.
        - completionHandler: If an error parameter was provided, a presentable `Error` will be returned.
      - Returns: An `OperationHandle` to get progress or cancel progress. Doesn't work on `LocalFileProvider`.
      */
     @discardableResult
-    func writeContents(path: String, contents: Data, atomically: Bool, completionHandler: SimpleCompletionHandler) -> OperationHandle?
+    func writeContents(path: String, contents: Data?, atomically: Bool, completionHandler: SimpleCompletionHandler) -> OperationHandle?
     
     /**
      Write the contents of the `Data` to a location asynchronously.
@@ -469,27 +469,27 @@ public protocol FileProviderReadWrite: FileProviderBasic {
      
      - Parameters:
      - path: Path of target file.
-       - contents: Data to be written into file.
+       - contents: Data to be written into file, pass nil to create empty file.
        - overwrite: Destination file should be overwritten if file is already exists. Default is `false`.
        - completionHandler: If an error parameter was provided, a presentable `Error` will be returned.
      - Returns: An `OperationHandle` to get progress or cancel progress. Doesn't work on `LocalFileProvider`.
      */
     @discardableResult
-    func writeContents(path: String, contents: Data, overwrite: Bool, completionHandler: SimpleCompletionHandler) -> OperationHandle?
+    func writeContents(path: String, contents: Data?, overwrite: Bool, completionHandler: SimpleCompletionHandler) -> OperationHandle?
     
     /**
      Write the contents of the `Data` to a location asynchronously.
      
      - Parameters:
        - path: Path of target file.
-       - contents: Data to be written into file.
+       - contents: Data to be written into file, pass nil to create empty file.
        - overwrite: Destination file should be overwritten if file is already exists. Default is `false`.
        - atomically: data will be written to a temporary file before writing to final location. Default is `false`.
        - completionHandler: If an error parameter was provided, a presentable `Error` will be returned.
      - Returns: An `OperationHandle` to get progress or cancel progress. Doesn't work on `LocalFileProvider`.
      */
     @discardableResult
-    func writeContents(path: String, contents: Data, atomically: Bool, overwrite: Bool, completionHandler: SimpleCompletionHandler) -> OperationHandle?
+    func writeContents(path: String, contents: Data?, atomically: Bool, overwrite: Bool, completionHandler: SimpleCompletionHandler) -> OperationHandle?
 }
 
 extension FileProviderReadWrite {
@@ -499,17 +499,17 @@ extension FileProviderReadWrite {
     }
     
     @discardableResult
-    public func writeContents(path: String, contents: Data, completionHandler: SimpleCompletionHandler) -> OperationHandle? {
+    public func writeContents(path: String, contents: Data?, completionHandler: SimpleCompletionHandler) -> OperationHandle? {
         return self.writeContents(path: path, contents: contents, atomically: false, overwrite: false, completionHandler: completionHandler)
     }
     
     @discardableResult
-    public func writeContents(path: String, contents: Data, atomically: Bool, completionHandler: SimpleCompletionHandler) -> OperationHandle? {
+    public func writeContents(path: String, contents: Data?, atomically: Bool, completionHandler: SimpleCompletionHandler) -> OperationHandle? {
         return self.writeContents(path: path, contents: contents, atomically: atomically, overwrite: false, completionHandler: completionHandler)
     }
     
     @discardableResult
-    public func writeContents(path: String, contents: Data, overwrite: Bool, completionHandler: SimpleCompletionHandler) -> OperationHandle? {
+    public func writeContents(path: String, contents: Data?, overwrite: Bool, completionHandler: SimpleCompletionHandler) -> OperationHandle? {
         return self.writeContents(path: path, contents: contents, atomically: false, overwrite: overwrite, completionHandler: completionHandler)
     }
 }
@@ -732,8 +732,8 @@ public protocol ExtendedFileProvider: FileProviderBasic {
      - Parameters:
        - path: path of file.
        - completionHandler: a closure with result of preview image or error.
-         `image`: `NSImage`/`UIImage` object contains preview.
-         `error`: Error returned by system.
+         - `image`: `NSImage`/`UIImage` object contains preview.
+         - `error`: Error returned by system.
     */
     func thumbnailOfFile(path: String, completionHandler: @escaping ((_ image: ImageClass?, _ error: Error?) -> Void))
     
@@ -748,8 +748,8 @@ public protocol ExtendedFileProvider: FileProviderBasic {
        - path: path of file.
        - dimension: width and height of result preview image.
        - completionHandler: a closure with result of preview image or error.
-         `image`: `NSImage`/`UIImage` object contains preview.
-     `error`: Error returned by system.
+         - `image`: `NSImage`/`UIImage` object contains preview.
+         - `error`: Error returned by system.
      */
     func thumbnailOfFile(path: String, dimension: CGSize?, completionHandler: @escaping ((_ image: ImageClass?, _ error: Error?) -> Void))
     
@@ -763,9 +763,9 @@ public protocol ExtendedFileProvider: FileProviderBasic {
      - Parameters:
        - path: path of file.
        - completionHandler: a closure with result of preview image or error.
-         `propertiesDictionary`: A `Dictionary` of proprty keys and values.
-         `keys`: An `Array` contains ordering of keys.
-         `error`: Error returned by system.
+         - `propertiesDictionary`: A `Dictionary` of proprty keys and values.
+         - `keys`: An `Array` contains ordering of keys.
+         - `error`: Error returned by system.
      */
     func propertiesOfFile(path: String, completionHandler: @escaping ((_ propertiesDictionary: [String: Any], _ keys: [String], _ error: Error?) -> Void))
 }
@@ -1021,16 +1021,11 @@ public protocol FileOperationDelegate: class {
     func fileProvider(_ fileProvider: FileProviderOperations, shouldProceedAfterError error: Error, operation: FileOperationType) -> Bool
 }
 
-internal class Weak<T: AnyObject> {
-    weak var value : T?
-    init (_ value: T) {
-        self.value = value
-    }
-}
-
 /// For internal use in `FileProvider` framework
 public protocol FoundationErrorEnum {
+    /// Init from error code
     init? (rawValue: Int)
+    // Raw error code
     var rawValue: Int { get }
 }
 

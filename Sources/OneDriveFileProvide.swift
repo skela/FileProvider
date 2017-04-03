@@ -225,11 +225,6 @@ extension OneDriveFileProvider: FileProviderOperations {
         return doOperation(.create(path: path), completionHandler: completionHandler)
     }
     
-    open func create(file fileName: String, at path: String, contents data: Data?, completionHandler: SimpleCompletionHandler) -> OperationHandle? {
-        let filePath = (path as NSString).appendingPathComponent(fileName)
-        return self.writeContents(path: filePath, contents: data ?? Data(), completionHandler: completionHandler)
-    }
-    
     open func moveItem(path: String, to toPath: String, overwrite: Bool, completionHandler: SimpleCompletionHandler) -> OperationHandle? {
         return doOperation(.move(source: path, destination: toPath), completionHandler: completionHandler)
     }
@@ -299,21 +294,23 @@ extension OneDriveFileProvider: FileProviderOperations {
         var request = URLRequest(url: self.url(of: path, modifier: "content"))
         request.httpMethod = "GET"
         request.setValue("Bearer \(credential?.password ?? "")", forHTTPHeaderField: "Authorization")
-        let task = session.downloadTask(with: request, completionHandler: { (cacheURL, response, error) in
-            guard let cacheURL = cacheURL, let httpResponse = response as? HTTPURLResponse , httpResponse.statusCode < 300 else {
-                let code = FileProviderHTTPErrorCode(rawValue: (response as? HTTPURLResponse)?.statusCode ?? -1)
-                let errorData : Data? = nil //Data(contentsOf:cacheURL) // TODO: Figure out how to get error response data for the error description
+        let task = session.downloadTask(with: request)
+        completionHandlersForTasks[task.taskIdentifier] = completionHandler
+        downloadCompletionHandlersForTasks[task.taskIdentifier] = { tempURL in
+            guard let httpResponse = task.response as? HTTPURLResponse , httpResponse.statusCode < 300 else {
+                let code = FileProviderHTTPErrorCode(rawValue: (task.response as? HTTPURLResponse)?.statusCode ?? -1)
+                let errorData : Data? = nil //Data(contentsOf: cacheURL) // TODO: Figure out how to get error response data for the error description
                 let serverError : FileProviderOneDriveError? = code != nil ? FileProviderOneDriveError(code: code!, path: path, errorDescription: String(data: errorData ?? Data(), encoding: .utf8)) : nil
-                completionHandler?(serverError ?? error)
+                completionHandler?(serverError)
                 return
             }
             do {
-                try FileManager.default.moveItem(at: cacheURL, to: destURL)
+                try FileManager.default.moveItem(at: tempURL, to: destURL)
                 completionHandler?(nil)
             } catch let e {
                 completionHandler?(e)
             }
-        })
+        }
         task.taskDescription = opType.json
         task.resume()
         return RemoteOperationHandle(operationType: opType, tasks: [task])
@@ -351,13 +348,13 @@ extension OneDriveFileProvider: FileProviderReadWrite {
         return RemoteOperationHandle(operationType: opType, tasks: [task])
     }
     
-    open func writeContents(path: String, contents data: Data, atomically: Bool, overwrite: Bool, completionHandler: SimpleCompletionHandler) -> OperationHandle? {
+    open func writeContents(path: String, contents data: Data?, atomically: Bool, overwrite: Bool, completionHandler: SimpleCompletionHandler) -> OperationHandle? {
         let opType = FileOperationType.modify(path: path)
         guard fileOperationDelegate?.fileProvider(self, shouldDoOperation: opType) ?? true == true else {
             return nil
         }
         // FIXME: remove 150MB restriction
-        return upload_simple(path, data: data, overwrite: overwrite, operation: opType, completionHandler: completionHandler)
+        return upload_simple(path, data: data ?? Data(), overwrite: overwrite, operation: opType, completionHandler: completionHandler)
     }
     
     fileprivate func registerNotifcation(path: String, eventHandler: (() -> Void)) {

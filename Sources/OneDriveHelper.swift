@@ -39,8 +39,8 @@ public final class OneDriveFileObject: FileObject {
         lPath = lPath.replacingOccurrences(of: "//", with: "", options: .anchored)
         self.init(baseURL: baseURL, name: name, path: lPath)
         self.size = (json["size"] as? NSNumber)?.int64Value ?? -1
-        self.modifiedDate = resolve(dateString: json["lastModifiedDateTime"] as? String ?? "")
-        self.creationDate = resolve(dateString: json["createdDateTime"] as? String ?? "")
+        self.modifiedDate = Date(rfcString: json["lastModifiedDateTime"] as? String ?? "")
+        self.creationDate = Date(rfcString: json["createdDateTime"] as? String ?? "")
         self.type = (json["folder"] as? String) != nil ? .directory : .regular
         self.id = json["id"] as? String
         self.entryTag = json["eTag"] as? String
@@ -127,14 +127,16 @@ internal extension OneDriveFileProvider {
         request.setValue("Bearer \(credential?.password ?? "")", forHTTPHeaderField: "Authorization")
         request.setValue("application/octet-stream", forHTTPHeaderField: "Content-Type")
         request.httpBody = data
-        let task = session.uploadTask(with: request, from: data, completionHandler: { (data, response, error) in
+        let task = session.uploadTask(with: request, from: data)
+        completionHandlersForTasks[task.taskIdentifier] = completionHandler
+        dataCompletionHandlersForTasks[task.taskIdentifier] = { [weak self] data in
             var responseError: FileProviderOneDriveError?
-            if let code = (response as? HTTPURLResponse)?.statusCode , code >= 300, let rCode = FileProviderHTTPErrorCode(rawValue: code) {
-                responseError = FileProviderOneDriveError(code: rCode, path: targetPath, errorDescription: String(data: data ?? Data(), encoding: .utf8))
+            if let code = (task.response as? HTTPURLResponse)?.statusCode , code >= 300, let rCode = FileProviderHTTPErrorCode(rawValue: code) {
+                responseError = FileProviderOneDriveError(code: rCode, path: targetPath, errorDescription: String(data: data, encoding: .utf8))
             }
-            completionHandler?(responseError ?? error)
-            self.delegateNotify(operation, error: responseError ?? error)
-        })
+            completionHandler?(responseError)
+            self?.delegateNotify(.create(path: targetPath), error: responseError)
+        }
         task.taskDescription = operation.json
         task.resume()
         return RemoteOperationHandle(operationType: operation, tasks: [task])
@@ -154,14 +156,16 @@ internal extension OneDriveFileProvider {
         request.httpMethod = "PUT"
         request.setValue("Bearer \(credential?.password ?? "")", forHTTPHeaderField: "Authorization")
         request.setValue("application/octet-stream", forHTTPHeaderField: "Content-Type")
-        let task = session.uploadTask(with: request, fromFile: localFile, completionHandler: { (data, response, error) in
+        let task = session.uploadTask(with: request, fromFile: localFile)
+        completionHandlersForTasks[task.taskIdentifier] = completionHandler
+        dataCompletionHandlersForTasks[task.taskIdentifier] = { [weak self] data in
             var responseError: FileProviderOneDriveError?
-            if let code = (response as? HTTPURLResponse)?.statusCode , code >= 300, let rCode = FileProviderHTTPErrorCode(rawValue: code) {
-                responseError = FileProviderOneDriveError(code: rCode, path: targetPath, errorDescription: String(data: data ?? Data(), encoding: .utf8))
+            if let code = (task.response as? HTTPURLResponse)?.statusCode , code >= 300, let rCode = FileProviderHTTPErrorCode(rawValue: code) {
+                responseError = FileProviderOneDriveError(code: rCode, path: targetPath, errorDescription: String(data: data, encoding: .utf8))
             }
-            completionHandler?(responseError ?? error)
-            self.delegateNotify(operation, error: responseError ?? error)
-        })
+            completionHandler?(responseError)
+            self?.delegateNotify(.create(path: targetPath), error: responseError)
+        }
         task.taskDescription = operation.json
         task.resume()
         return RemoteOperationHandle(operationType: operation, tasks: [task])
@@ -247,7 +251,7 @@ internal extension OneDriveFileProvider {
         if let parent = json["image"] as? [String: Any] ?? json["video"] as? [String: Any], let duration = parent["duration"] as? UInt64 {
             add(key: "Duration", value: (TimeInterval(duration) / 1000).formatshort)
         }
-        if let timeTakenStr = json["takenDateTime"] as? String, let timeTaken = resolve(dateString: timeTakenStr) {
+        if let timeTakenStr = json["takenDateTime"] as? String, let timeTaken = Date(rfcString: timeTakenStr) {
             OneDriveFileProvider.dateFormatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
             add(key: "Date taken", value:  OneDriveFileProvider.dateFormatter.string(from: timeTaken))
         }

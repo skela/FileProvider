@@ -207,15 +207,6 @@ open class LocalFileProvider: FileProvider, FileProviderMonitor, FileProvideUndo
     }
     
     @discardableResult
-    open func create(file fileName: String, at atPath: String, contents data: Data?, completionHandler: SimpleCompletionHandler) -> OperationHandle? {
-        let fileName = fileName.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-        let path = (atPath as NSString).appendingPathComponent(fileName)
-        let opType = FileOperationType.create(path: path)
-        
-        return self.doOperation(opType, data: data, atomically: true, completionHandler: completionHandler)
-    }
-    
-    @discardableResult
     open func moveItem(path: String, to toPath: String, overwrite: Bool = false, completionHandler: SimpleCompletionHandler) -> OperationHandle? {
         let opType = FileOperationType.move(source: path, destination: toPath)
 
@@ -492,9 +483,10 @@ open class LocalFileProvider: FileProvider, FileProviderMonitor, FileProvideUndo
     }
     
     @discardableResult
-    open func writeContents(path: String, contents data: Data, atomically: Bool, overwrite: Bool, completionHandler: SimpleCompletionHandler) -> OperationHandle? {
-        let opType = FileOperationType.modify(path: path)
-        return self.doOperation(opType, data: data, atomically: atomically, completionHandler: completionHandler)
+    open func writeContents(path: String, contents data: Data?, atomically: Bool, overwrite: Bool, completionHandler: SimpleCompletionHandler) -> OperationHandle? {
+        let fileExists = fileManager.fileExists(atPath: url(of: path).path)
+        let opType: FileOperationType = fileExists ? .modify(path: path) : .create(path: path)
+        return self.doOperation(opType, data: data ?? Data(), atomically: atomically, completionHandler: completionHandler)
     }
     
     fileprivate var monitors = [LocalFolderMonitor]()
@@ -532,13 +524,13 @@ open class LocalFileProvider: FileProvider, FileProviderMonitor, FileProvideUndo
 public extension LocalFileProvider {
     /**
      Creates a symbolic link at the specified path that points to an item at the given path.
-     This method does not traverse symbolic links contained in destURL, making it possible 
-     to create symbolic links to locations that do not yet exist. 
-     Also, if the final path component in url is a symbolic link, that link is not followed.
+     This method does not traverse symbolic links contained in destination path, making it possible
+     to create symbolic links to locations that do not yet exist.
+     Also, if the final path component is a symbolic link, that link is not followed.
     
      - Parameters:
-       - path: The file path at which to create the new symbolic link. The last component of the path issued as the name of the link.
-       - destPath: The path that contains the item to be pointed to by the link. In other words, this is the destination of the link.
+       - symbolicLink: The file path at which to create the new symbolic link. The last component of the path issued as the name of the link.
+       - withDestinationPath: The path that contains the item to be pointed to by the link. In other words, this is the destination of the link.
        - completionHandler: If an error parameter was provided, a presentable `Error` will be returned.
     */
     public func create(symbolicLink path: String, withDestinationPath destPath: String, completionHandler: SimpleCompletionHandler) {
