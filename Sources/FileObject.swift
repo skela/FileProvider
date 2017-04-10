@@ -17,7 +17,7 @@ open class FileObject: Equatable {
         self.allValues = allValues
     }
     
-    internal init(url: URL, name: String, path: String) {
+    public init(url: URL, name: String, path: String) {
         self.allValues = [URLResourceKey: Any]()
         self.url = url
         self.name = name

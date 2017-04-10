@@ -82,30 +82,43 @@ extension WebDAVFileProvider : FileProviderObservationProvider
     }
 }
 
+extension String
+{
+    var correctPath : String
+    {
+        var p = hasPrefix("/") ? self : "/" + self
+        if p.hasSuffix("/")
+        {
+            p.remove(at: p.index(before:p.endIndex))
+        }
+        return p
+    }
+}
+
 open class FileProviderObservationTask
 {
-    var path : String
-    var session : URLSession
-    var changed : ((Void)->(Void))
+    open var path : String
+    open var session : URLSession
+    open var changed : ((Void)->(Void))
     
-    func start()
+    open func start()
     {
         fatalError("Subclasses need to implement the `start()` method.")
     }
     
-    func stop()
+    open func stop()
     {
         fatalError("Subclasses need to implement the `stop()` method.")
     }
     
-    init(path:String,session:URLSession,changed:@escaping ((Void)->(Void)))
+    public init(path:String,session:URLSession,changed:@escaping ((Void)->(Void)))
     {
-        self.path = path
+        self.path = path.correctPath
         self.session = session
         self.changed = changed
     }
     
-    func fireChanged()
+    open func fireChanged()
     {
         DispatchQueue.main.async
         {
@@ -261,19 +274,12 @@ class DropboxProviderObservationTask : FileProviderObservationTask
     
     var stopped = false
     
+    static var cursors = Dictionary<String,String>()
+    
     init(path:String,password:String,session:URLSession,changed:@escaping ((Void)->(Void)))
     {
         self.password = password
         super.init(path:path,session:session,changed:changed)
-    }
-    
-    func correctPath(_ path: String) -> String
-    {
-        var p = path.hasPrefix("/") ? path : "/" + path
-        if p.hasSuffix("/") {
-            p.remove(at: p.index(before:p.endIndex))
-        }
-        return p
     }
     
     func getCursor() -> String?
@@ -286,7 +292,7 @@ class DropboxProviderObservationTask : FileProviderObservationTask
         request.httpMethod = "POST"
         request.setValue("Bearer \(password)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        let requestDictionary : [String:AnyObject] = ["path":correctPath(path) as NSString]
+        let requestDictionary : [String:AnyObject] = ["path":path as NSString]
         let json = String(jsonDictionary:requestDictionary) ?? ""
         request.httpBody = json.data(using: .utf8)
         cursorTask = session.dataTask(with: request, completionHandler: { (data, response, error) in
@@ -347,7 +353,7 @@ class DropboxProviderObservationTask : FileProviderObservationTask
     
     override func start()
     {
-        var cur : String? = nil
+        var cur : String? = DropboxProviderObservationTask.cursors[path]
         while cur == nil
         {
             cur = getCursor()
@@ -371,6 +377,7 @@ class DropboxProviderObservationTask : FileProviderObservationTask
                 if let c = getCursor()
                 {
                     cursor = c
+                    DropboxProviderObservationTask.cursors[path] = c
                 }
             }
             if res.backoff > 0
