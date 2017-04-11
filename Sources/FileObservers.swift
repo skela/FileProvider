@@ -29,10 +29,10 @@ public class FileObservers
         tasks.removeAll()
     }
     
-    open func registerNotification(path:String,provider:FileProviderObservationProvider,changed:@escaping (()->Void))
+    open func registerNotification(path:String,type:FileProviderObservationType,provider:FileProviderObservationProvider,changed:@escaping (()->Void))
     {
         unregisterNotification(path:path)
-        guard let task = provider.createObservationTask(path:path,changed:changed) else { return }
+        guard let task = provider.createObservationTask(path:path,type:type,changed:changed) else { return }
         tasks[path] = task
         bg.async
         {
@@ -63,22 +63,22 @@ public class FileObservers
 
 public protocol FileProviderObservationProvider
 {
-    func createObservationTask(path:String,changed:@escaping (()->Void)) -> FileProviderObservationTask?
+    func createObservationTask(path:String,type:FileProviderObservationType,changed:@escaping (()->Void)) -> FileProviderObservationTask?
 }
 
 extension DropboxFileProvider : FileProviderObservationProvider
 {
-    public func createObservationTask(path:String,changed:@escaping (()->Void)) -> FileProviderObservationTask?
+    public func createObservationTask(path:String,type:FileProviderObservationType,changed:@escaping (()->Void)) -> FileProviderObservationTask?
     {
-        return DropboxProviderObservationTask(path:path,password:credential?.password ?? "",session:session,changed:changed)
+        return DropboxProviderObservationTask(path:path,type:type,password:credential?.password ?? "",session:session,changed:changed)
     }
 }
 
 extension WebDAVFileProvider : FileProviderObservationProvider
 {
-    public func createObservationTask(path:String,changed:@escaping (()->Void)) -> FileProviderObservationTask?
+    public func createObservationTask(path:String,type:FileProviderObservationType,changed:@escaping (()->Void)) -> FileProviderObservationTask?
     {
-        return WebDavProviderObservationTask(path:path,provider:self,changed:changed)
+        return WebDavProviderObservationTask(path:path,type:type,provider:self,changed:changed)
     }
 }
 
@@ -95,9 +95,16 @@ extension String
     }
 }
 
+public enum FileProviderObservationType
+{
+    case children // the path and its children
+    case descendants // the path and its children and their children etc.
+}
+
 open class FileProviderObservationTask
 {
     open var path : String
+    open var type : FileProviderObservationType
     open var session : URLSession
     open var changed : ((Void)->(Void))
     
@@ -111,9 +118,10 @@ open class FileProviderObservationTask
         fatalError("Subclasses need to implement the `stop()` method.")
     }
     
-    public init(path:String,session:URLSession,changed:@escaping ((Void)->(Void)))
+    public init(path:String,type:FileProviderObservationType,session:URLSession,changed:@escaping ((Void)->(Void)))
     {
         self.path = path.correctPath
+        self.type = type
         self.session = session
         self.changed = changed
     }
@@ -127,16 +135,17 @@ open class FileProviderObservationTask
     }
 }
 
+// TODO: Make use of FileProviderObservationType
 class WebDavProviderObservationTask : FileProviderObservationTask
 {
     var infoTask : URLSessionDataTask?
     var infoUrl : URL
     var stopped = false
     
-    init(path:String,provider:WebDAVFileProvider,changed:@escaping ((Void)->(Void)))
+    init(path:String,type:FileProviderObservationType,provider:WebDAVFileProvider,changed:@escaping ((Void)->(Void)))
     {
         infoUrl = provider.url(of: path)
-        super.init(path:path,session:provider.session,changed:changed)
+        super.init(path:path,type:type,session:provider.session,changed:changed)
     }
     
     func getTag() -> (tag:String?,backoff:Int)
@@ -265,6 +274,7 @@ class WebDavProviderObservationTask : FileProviderObservationTask
     }
 }
 
+// TODO: Make use of FileProviderObservationType
 class DropboxProviderObservationTask : FileProviderObservationTask
 {
     private var password : String
@@ -276,10 +286,10 @@ class DropboxProviderObservationTask : FileProviderObservationTask
     
     static var cursors = Dictionary<String,String>()
     
-    init(path:String,password:String,session:URLSession,changed:@escaping ((Void)->(Void)))
+    init(path:String,type:FileProviderObservationType,password:String,session:URLSession,changed:@escaping ((Void)->(Void)))
     {
         self.password = password
-        super.init(path:path,session:session,changed:changed)
+        super.init(path:path,type:type,session:session,changed:changed)
     }
     
     func getCursor() -> String?
