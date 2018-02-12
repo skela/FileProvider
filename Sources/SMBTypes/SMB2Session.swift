@@ -12,6 +12,8 @@ extension SMB2 {
     // MARK: SMB2 Negotiating
     
     struct NegotiateRequest: SMBRequestBody {
+        static var command: SMB2.Command = .NEGOTIATE
+        
         let header: NegotiateRequest.Header
         let dialects: [UInt16]
         let contexts: [(type: NegotiateContextType, data: Data)]
@@ -64,7 +66,10 @@ extension SMB2 {
             var contextCount: UInt16
             fileprivate let reserved2: UInt16
             var clientStartTime: SMBTime {
-                let time = Int64(contextOffset) + (Int64(contextCount) << 32) + (Int64(contextCount) << 48)
+                let lo = Int64(contextOffset)
+                let hi1 = Int64(contextCount) << 32
+                let hi2 = Int64(contextCount) << 48
+                let time: Int64 = lo + hi1 + hi2
                 return SMBTime(time: time)
             }
             
@@ -175,6 +180,8 @@ extension SMB2 {
     // MARK: SMB2 Session Setup
     
     struct SessionSetupRequest: SMBRequestBody {
+        static var command: SMB2.Command = .SESSION_SETUP
+        
         let header: SessionSetupRequest.Header
         let buffer: Data?
         
@@ -288,6 +295,8 @@ extension SMB2 {
     // MARK: SMB2 Log off
     
     struct LogOff: SMBRequestBody, SMBResponseBody {
+        static var command: SMB2.Command = .LOGOFF
+        
         let size: UInt16
         let reserved: UInt16
         
@@ -300,6 +309,8 @@ extension SMB2 {
     // MARK: SMB2 Echo
     
     struct Echo: SMBRequestBody, SMBResponseBody {
+        static var command: SMB2.Command = .ECHO
+        
         let size: UInt16
         let reserved: UInt16
         

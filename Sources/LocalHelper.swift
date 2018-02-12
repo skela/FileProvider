@@ -17,11 +17,8 @@ public final class LocalFileObject: FileObject {
     /// Initiates a `LocalFileObject` with attributes of file in path.
     public convenience init? (fileWithPath path: String, relativeTo relativeURL: URL?) {
         var fileURL: URL?
-        var rpath = path.replacingOccurrences(of: relativeURL?.path ?? "", with: "", options: .anchored)
-        if relativeURL != nil && rpath.hasPrefix("/") {
-            rpath.remove(at: rpath.startIndex)
-        }
-        if #available(iOS 9.0, macOS 10.11, tvOS 9.0, *) {
+        var rpath = path.replacingOccurrences(of: relativeURL?.path ?? "", with: "", options: .anchored).replacingOccurrences(of: "/", with: "", options: .anchored)
+        if #available(iOS 9.0, macOS 10.11, *) {
             fileURL = URL(fileURLWithPath: rpath, relativeTo: relativeURL)
         } else {
             rpath = rpath.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? rpath
@@ -78,6 +75,16 @@ public final class LocalFileObject: FileObject {
         get {
             let data = allValues[.generationIdentifierKey] as? Data
             return data?.map { String(format: "%02hhx", $0) }.joined()
+        }
+    }
+    
+    /// Count of children items of a driectory. It costs disk access for local directories.
+    open public(set) override var childrensCount: Int? {
+        get {
+            return try? FileManager.default.contentsOfDirectory(atPath: self.url.path).count
+        }
+        set {
+            //
         }
     }
 }
@@ -214,104 +221,6 @@ internal class LocalFileProviderManagerDelegate: NSObject, FileManagerDelegate {
         let srcPath = provider.relativePathOf(url: srcURL)
         let dstPath = provider.relativePathOf(url: dstURL)
         return delegate.fileProvider(provider, shouldProceedAfterError: error, operation: .link(link: srcPath, target: dstPath))
-    }
-}
-
-/// - Note: Local operation handling is limited. Please don't use as much as possible.
-open class LocalOperationHandle: OperationHandle {
-    /// Url of file which operation is doing on
-    public let baseURL: URL
-    /// Type of operation
-    public let operationType: FileOperationType
-    
-    init (operationType: FileOperationType, baseURL: URL?) {
-        self.baseURL = baseURL ?? URL(fileURLWithPath: "/")
-        self.operationType = operationType
-        inProgress = false
-    }
-    
-    private var sourceURL: URL? {
-        guard let source = operationType.source else { return nil }
-        return source.hasPrefix("file://") ? URL(fileURLWithPath: source) : baseURL.appendingPathComponent(source)
-    }
-    
-    private var destURL: URL? {
-        guard let dest = operationType.destination else { return nil }
-        return dest.hasPrefix("file://") ? URL(fileURLWithPath: dest) : baseURL.appendingPathComponent(dest)
-    }
-    
-    /// Caution: may put pressure on CPU, may have latency
-    open var bytesSoFar: Int64 {
-        assert(!Thread.isMainThread, "Don't run \(#function) method on main thread")
-        switch operationType {
-        case .modify:
-            guard let url = sourceURL, url.isFileURL else { return 0 }
-            if url.fileIsDirectory {
-                return iterateDirectory(url, deep: true).totalsize
-            } else {
-                return url.fileSize
-            }
-        case .copy, .move:
-            guard let url = destURL, url.isFileURL else { return 0 }
-            if url.fileIsDirectory {
-                return iterateDirectory(url, deep: true).totalsize
-            } else {
-                return url.fileSize
-            }
-        default:
-            return 0
-        }
-        
-    }
-    
-    /// Caution: may put pressure on CPU, may have latency
-    open var totalBytes: Int64 {
-        assert(!Thread.isMainThread, "Don't run \(#function) method on main thread")
-        switch operationType {
-        case .copy, .move:
-            guard let url = sourceURL, url.isFileURL else { return 0 }
-            if url.fileIsDirectory {
-                return iterateDirectory(url, deep: true).totalsize
-            } else {
-                return url.fileSize
-            }
-        default:
-            return 0
-        }
-    }
-    
-    /// Not usable in local provider
-    open var inProgress: Bool
-
-
-    /// Not usable in local provider
-    open func cancel() -> Bool{
-        return false
-    }
-    
-    func iterateDirectory(_ pathURL: URL, deep: Bool) -> (folders: Int, files: Int, totalsize: Int64) {
-        var folders = 0
-        var files = 0
-        var totalsize: Int64 = 0
-        let keys: [URLResourceKey] = [.isDirectoryKey, .fileSizeKey]
-        let enumOpt: FileManager.DirectoryEnumerationOptions = !deep ? [.skipsSubdirectoryDescendants, .skipsPackageDescendants] : []
-        
-        let fp = FileManager()
-        let filesList = fp.enumerator(at: pathURL, includingPropertiesForKeys: keys, options: enumOpt, errorHandler: nil)
-        while let fileURL = filesList?.nextObject() as? URL {
-            guard let values = try? fileURL.resourceValues(forKeys: [.isDirectoryKey, .fileSizeKey]) else { continue }
-            let isdir = values.isDirectory ?? false
-            let size = Int64(values.fileSize ?? 0)
-            if isdir {
-                folders += 1
-            } else {
-                files += 1
-            }
-            totalsize += size
-        }
-        
-        return (folders, files, totalsize)
-        
     }
 }
 

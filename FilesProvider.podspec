@@ -1,5 +1,5 @@
 #
-#  Be sure to run `pod spec lint FileProvider.podspec' to ensure this is a
+#  Be sure to run `pod spec lint FilesProvider.podspec' to ensure this is a
 #  valid spec and to remove all comments including this before submitting the spec.
 #
 #  To learn more about Podspec attributes see http://docs.cocoapods.org/specification.html
@@ -15,8 +15,8 @@ Pod::Spec.new do |s|
   #  summary should be tweet-length, and the description more in depth.
   #
 
-  s.name         = "FileProvider"
-  s.version      = "0.16.2"
+  s.name         = "FilesProvider"
+  s.version      = "0.22.0"
   s.summary      = "FileManager replacement for Local and Remote (WebDAV/FTP/Dropbox/OneDrive/SMB2) files on iOS and macOS."
 
   # This description is used to generate tags and improve search results.
@@ -58,7 +58,7 @@ Pod::Spec.new do |s|
   s.author             = { "Amir Abbas Mousavian" => "a.mosavian@gmail.com" }
   # Or just: s.author    = "Amir Abbas Mousavian"
   # s.authors            = { "Amir Abbas Mousavian" => "a.mosavian@gmail.com" }
-  # s.social_media_url   = "https://twitter.com/amosavian"
+  s.social_media_url   = "https://twitter.com/amosavian"
 
   # ――― Platform Specifics ――――――――――――――――――――――――――――――――――――――――――――――――――――――― #
   #

@@ -14,17 +14,17 @@ import AVFoundation
 extension LocalFileProvider: ExtendedFileProvider {
     open func thumbnailOfFileSupported(path: String) -> Bool {
         switch (path as NSString).pathExtension.lowercased() {
-        case LocalFileInformationGenerator.imageThumbnailExtensions:
+        case LocalFileInformationGenerator.imageThumbnailExtensions.contains:
             return true
-        case LocalFileInformationGenerator.audioThumbnailExtensions:
+        case LocalFileInformationGenerator.audioThumbnailExtensions.contains:
             return true
-        case LocalFileInformationGenerator.videoThumbnailExtensions:
+        case LocalFileInformationGenerator.videoThumbnailExtensions.contains:
             return true
-        case LocalFileInformationGenerator.pdfThumbnailExtensions:
+        case LocalFileInformationGenerator.pdfThumbnailExtensions.contains:
             return true
-        case LocalFileInformationGenerator.officeThumbnailExtensions:
+        case LocalFileInformationGenerator.officeThumbnailExtensions.contains:
             return true
-        case LocalFileInformationGenerator.customThumbnailExtensions:
+        case LocalFileInformationGenerator.customThumbnailExtensions.contains:
             return true
         default:
             return false
@@ -34,19 +34,19 @@ extension LocalFileProvider: ExtendedFileProvider {
     open func propertiesOfFileSupported(path: String) -> Bool {
         let fileExt = (path as NSString).pathExtension.lowercased()
         switch fileExt {
-        case LocalFileInformationGenerator.imagePropertiesExtensions:
+        case LocalFileInformationGenerator.imagePropertiesExtensions.contains:
             return LocalFileInformationGenerator.imageProperties != nil
-        case LocalFileInformationGenerator.audioPropertiesExtensions:
+        case LocalFileInformationGenerator.audioPropertiesExtensions.contains:
             return LocalFileInformationGenerator.audioProperties != nil
-        case LocalFileInformationGenerator.videoPropertiesExtensions:
+        case LocalFileInformationGenerator.videoPropertiesExtensions.contains:
             return LocalFileInformationGenerator.videoProperties != nil
-        case LocalFileInformationGenerator.pdfPropertiesExtensions:
+        case LocalFileInformationGenerator.pdfPropertiesExtensions.contains:
             return LocalFileInformationGenerator.pdfProperties != nil
-        case LocalFileInformationGenerator.archivePropertiesExtensions:
+        case LocalFileInformationGenerator.archivePropertiesExtensions.contains:
             return LocalFileInformationGenerator.archiveProperties != nil
-        case LocalFileInformationGenerator.officePropertiesExtensions:
+        case LocalFileInformationGenerator.officePropertiesExtensions.contains:
             return LocalFileInformationGenerator.officeProperties != nil
-        case LocalFileInformationGenerator.customPropertiesExtensions:
+        case LocalFileInformationGenerator.customPropertiesExtensions.contains:
             return LocalFileInformationGenerator.customProperties != nil
 
         default:
@@ -62,17 +62,17 @@ extension LocalFileProvider: ExtendedFileProvider {
             let fileURL = self.url(of: path)
             // Create Thumbnail and cache
             switch fileURL.pathExtension.lowercased() {
-            case LocalFileInformationGenerator.videoThumbnailExtensions:
+            case LocalFileInformationGenerator.videoThumbnailExtensions.contains:
                 thumbnailImage = LocalFileInformationGenerator.videoThumbnail(fileURL)
-            case LocalFileInformationGenerator.audioThumbnailExtensions:
+            case LocalFileInformationGenerator.audioThumbnailExtensions.contains:
                 thumbnailImage = LocalFileInformationGenerator.audioThumbnail(fileURL)
-            case LocalFileInformationGenerator.imageThumbnailExtensions:
+            case LocalFileInformationGenerator.imageThumbnailExtensions.contains:
                 thumbnailImage = LocalFileInformationGenerator.imageThumbnail(fileURL)
-            case LocalFileInformationGenerator.pdfThumbnailExtensions:
+            case LocalFileInformationGenerator.pdfThumbnailExtensions.contains:
                 thumbnailImage = LocalFileInformationGenerator.pdfThumbnail(fileURL)
-            case LocalFileInformationGenerator.officeThumbnailExtensions:
+            case LocalFileInformationGenerator.officeThumbnailExtensions.contains:
                 thumbnailImage = LocalFileInformationGenerator.officeThumbnail(fileURL)
-            case LocalFileInformationGenerator.customThumbnailExtensions:
+            case LocalFileInformationGenerator.customThumbnailExtensions.contains:
                 thumbnailImage = LocalFileInformationGenerator.customThumbnail(fileURL)
             default:
                 completionHandler(nil, nil)
@@ -91,19 +91,19 @@ extension LocalFileProvider: ExtendedFileProvider {
             let fileExt = (path as NSString).pathExtension.lowercased()
             var getter: ((_ fileURL: URL) -> (prop: [String: Any], keys: [String]))?
             switch fileExt {
-            case LocalFileInformationGenerator.imagePropertiesExtensions:
+            case LocalFileInformationGenerator.imagePropertiesExtensions.contains:
                 getter = LocalFileInformationGenerator.imageProperties
-             case LocalFileInformationGenerator.audioPropertiesExtensions:
+             case LocalFileInformationGenerator.audioPropertiesExtensions.contains:
                 getter = LocalFileInformationGenerator.audioProperties
-            case LocalFileInformationGenerator.videoPropertiesExtensions:
+            case LocalFileInformationGenerator.videoPropertiesExtensions.contains:
                 getter = LocalFileInformationGenerator.videoProperties
-            case LocalFileInformationGenerator.pdfPropertiesExtensions:
+            case LocalFileInformationGenerator.pdfPropertiesExtensions.contains:
                 getter = LocalFileInformationGenerator.pdfProperties
-            case LocalFileInformationGenerator.archivePropertiesExtensions:
+            case LocalFileInformationGenerator.archivePropertiesExtensions.contains:
                 getter = LocalFileInformationGenerator.archiveProperties
-            case LocalFileInformationGenerator.officePropertiesExtensions:
+            case LocalFileInformationGenerator.officePropertiesExtensions.contains:
                 getter = LocalFileInformationGenerator.officeProperties
-            case LocalFileInformationGenerator.customPropertiesExtensions:
+            case LocalFileInformationGenerator.customPropertiesExtensions.contains:
                 getter = LocalFileInformationGenerator.customProperties
             default:
                 break
@@ -125,18 +125,18 @@ public struct LocalFileInformationGenerator {
     /// Image extensions supportes for thumbnail.
     ///
     /// Default: `["jpg", "jpeg", "gif", "bmp", "png", "tif", "tiff", "ico"]`
-    static public var imageThumbnailExtensions: [String]  = ["jpg", "jpeg", "gif", "bmp", "png", "tif", "tiff", "ico"]
+    static public var imageThumbnailExtensions: [String]  = ["heic", "jpg", "jpeg", "gif", "bmp", "png", "tif", "tiff", "ico"]
     
     /// Audio and music extensions supportes for thumbnail.
     ///
-    /// Default: `["mp3", "aac", "m4a"]`
-    static public var audioThumbnailExtensions: [String]  = ["mp3", "aac", "m4a"]
+    /// Default: `["mp1", "mp2", "mp3", "mpa", "mpga", "m1a", "m2a", "m4a", "m4b", "m4p", "m4r", "aac", "snd", "caf", "aa", "aax", "adts", "aif", "aifc", "aiff", "au", "flac", "amr", "wav", "wave", "bwf", "ac3", "eac3", "ec3", "cdda"]`
+    static public var audioThumbnailExtensions: [String]  = ["mp1", "mp2", "mp3", "mpa", "mpga", "m1a", "m2a", "m4a", "m4b", "m4p", "m4r", "aac", "snd", "caf", "aa", "aax", "adts", "aif", "aifc", "aiff", "au", "flac", "amr", "wav", "wave", "bwf", "ac3", "eac3", "ec3", "cdda"]
     
     /// Video extensions supportes for thumbnail.
     ///
-    /// Default: `["mov", "mp4", "m4v", "mpg", "mpeg"]`
-    static public var videoThumbnailExtensions: [String]  = ["mov", "mp4", "m4v", "mpg", "mpeg"]
-    
+    /// Default: `["mov", "mp4", "mpg4", "m4v", "mqv", "mpg", "mpeg", "avi", "vfw", "3g2", "3gp", "3gp2", "3gpp", "qt"]`
+    static public var videoThumbnailExtensions: [String]  = ["mov", "mp4", "mpg4", "m4v", "mqv", "mpg", "mpeg", "avi", "vfw", "3g2", "3gp", "3gp2", "3gpp", "qt"]
+
     /// Portable document file extensions supportes for thumbnail.
     ///
     /// Default: `["pdf"]`
@@ -156,17 +156,17 @@ public struct LocalFileInformationGenerator {
     /// Image extensions supportes for properties.
     ///
     /// Default: `["jpg", "jpeg", "gif", "bmp", "png", "tif", "tiff"]`
-    static public var imagePropertiesExtensions: [String]   = ["jpg", "jpeg", "bmp", "gif", "png", "tif", "tiff"]
+    static public var imagePropertiesExtensions: [String]   = ["heic", "jpg", "jpeg", "bmp", "gif", "png", "tif", "tiff"]
     
     /// Audio and music extensions supportes for properties.
     ///
-    /// Default: `["mp3", "aac", "m4a", "caf"]`
-    static public var audioPropertiesExtensions: [String]   = ["mp3", "aac", "m4a", "caf"]
+    /// Default: `["mp1", "mp2", "mp3", "mpa", "mpga", "m1a", "m2a", "m4a", "m4b", "m4p", "m4r", "aac", "snd", "caf", "aa", "aax", "adts", "aif", "aifc", "aiff", "au", "flac", "amr", "wav", "wave", "bwf", "ac3", "eac3", "ec3", "cdda"]`
+    static public var audioPropertiesExtensions: [String]   = ["mp1", "mp2", "mp3", "mpa", "mpga", "m1a", "m2a", "m4a", "m4b", "m4p", "m4r", "aac", "snd", "caf", "aa", "aax", "adts", "aif", "aifc", "aiff", "au", "flac", "amr", "wav", "wave", "bwf", "ac3", "eac3", "ec3", "cdda"]
     
     /// Video extensions supportes for properties.
     ///
-    /// Default: `["mp4", "mpg", "3gp", "mov", "avi"]`
-    static public var videoPropertiesExtensions: [String]   = ["mp4", "mpg", "3gp", "mov", "avi"]
+    /// Default: `["mov", "mp4", "mpg4", "m4v", "mqv", "mpg", "mpeg", "avi", "vfw", "3g2", "3gp", "3gp2", "3gpp", "qt"]`
+    static public var videoPropertiesExtensions: [String]   = ["mov", "mp4", "mpg4", "m4v", "mqv", "mpg", "mpeg", "avi", "vfw", "3g2", "3gp", "3gp2", "3gpp", "qt"]
     
     /// Portable document file extensions supportes for properties.
     ///
@@ -197,8 +197,13 @@ public struct LocalFileInformationGenerator {
     static public var audioThumbnail: (_ fileURL: URL) -> ImageClass? = { fileURL in
         let playerItem = AVPlayerItem(url: fileURL)
         let metadataList = playerItem.asset.commonMetadata
+        #if swift(>=4.0)
+        let commonKeyArtwork = AVMetadataKey.commonKeyArtwork
+        #else
+        let commonKeyArtwork = AVMetadataCommonKeyArtwork
+        #endif
         for item in metadataList {
-            if item.commonKey == AVMetadataCommonKeyArtwork {
+            if item.commonKey == commonKeyArtwork {
                 if let data = item.dataValue {
                     return ImageClass(data: data)
                 }
@@ -212,7 +217,7 @@ public struct LocalFileInformationGenerator {
         let asset = AVAsset(url: fileURL)
         let assetImgGenerate = AVAssetImageGenerator(asset: asset)
         assetImgGenerate.appliesPreferredTrackTransform = true
-        let time = CMTimeMake(asset.duration.value / 3, asset.duration.timescale)
+        let time = CMTime(value: asset.duration.value / 3, timescale: asset.duration.timescale)
         if let cgImage = try? assetImgGenerate.copyCGImage(at: time, actualTime: nil) {
             #if os(macOS)
             return ImageClass(cgImage: cgImage, size: .zero)
@@ -319,28 +324,34 @@ public struct LocalFileInformationGenerator {
             guard let key = key else {
                 return nil
             }
-            guard let regex = try? NSRegularExpression(pattern: "([a-z])([A-Z])" , options: NSRegularExpression.Options()) else {
+            guard let regex = try? NSRegularExpression(pattern: "([a-z])([A-Z])" , options: []) else {
                 return nil
             }
-            let newKey = regex.stringByReplacingMatches(in: key, options: NSRegularExpression.MatchingOptions(), range: NSMakeRange(0, (key as NSString).length) , withTemplate: "$1 $2")
+            let newKey = regex.stringByReplacingMatches(in: key, options: [], range: NSRange(location: 0, length: (key as NSString).length) , withTemplate: "$1 $2")
             return newKey.capitalized
         }
         
-        if FileManager.default.fileExists(atPath: fileURL.path) {
-            let playerItem = AVPlayerItem(url: fileURL)
-            let metadataList = playerItem.asset.commonMetadata
-            for item in metadataList {
-                if let description = makeDescription(item.commonKey) {
-                    if let value = item.stringValue {
-                        keys.append(description)
-                        dic[description] = value
-                    }
+        guard fileURL.fileExists else {
+            return (dic, keys)
+        }
+        let playerItem = AVPlayerItem(url: fileURL)
+        let metadataList = playerItem.asset.commonMetadata
+        for item in metadataList {
+            #if swift(>=4.0)
+                let commonKey = item.commonKey?.rawValue
+            #else
+                let commonKey = item.commonKey
+            #endif
+            if let description = makeDescription(commonKey) {
+                if let value = item.stringValue {
+                    keys.append(description)
+                    dic[description] = value
                 }
             }
-            if let ap = try? AVAudioPlayer(contentsOf: fileURL) {
-                add(key: "Duration", value: ap.duration.formatshort)
-                add(key: "Bitrate", value: ap.settings[AVSampleRateKey] as? Int)
-            }
+        }
+        if let ap = try? AVAudioPlayer(contentsOf: fileURL) {
+            add(key: "Duration", value: ap.duration.formatshort)
+            add(key: "Bitrate", value: ap.settings[AVSampleRateKey] as? Int)
         }
         return (dic, keys)
     }
@@ -366,7 +377,11 @@ public struct LocalFileInformationGenerator {
             }
         }
         let asset = AVURLAsset(url: fileURL, options: nil)
+        #if swift(>=4.0)
+        let videoTracks = asset.tracks(withMediaType: AVMediaType.video)
+        #else
         let videoTracks = asset.tracks(withMediaType: AVMediaTypeVideo)
+        #endif
         if let videoTrack = videoTracks.first {
             var bitrate: Float = 0
             let width = Int(videoTrack.naturalSize.width)
@@ -380,7 +395,11 @@ public struct LocalFileInformationGenerator {
             add(key: "Duration", value: TimeInterval(duration).formatshort)
             add(key: "Video Bitrate", value: "\(Int(ceil(bitrate / 1000))) kbps")
         }
+        #if swift(>=4.0)
+        let audioTracks = asset.tracks(withMediaType: AVMediaType.audio)
+        #else
         let audioTracks = asset.tracks(withMediaType: AVMediaTypeAudio)
+        #endif
         // dic["Audio channels"] = audioTracks.count
         var bitrate: Float = 0
         for track in audioTracks {
@@ -403,54 +422,64 @@ public struct LocalFileInformationGenerator {
         }
         
         func getKey(_ key: String, from dict: CGPDFDictionaryRef) -> String? {
-            var cfValue: CGPDFStringRef? = nil
-            if (CGPDFDictionaryGetString(dict, key, &cfValue)), let value = CGPDFStringCopyTextString(cfValue!) {
+            var cfStrValue: CGPDFStringRef?
+            if (CGPDFDictionaryGetString(dict, key, &cfStrValue)), let value = cfStrValue.flatMap({ CGPDFStringCopyTextString($0) }) {
                 return value as String
+            }
+            var cfArrayValue: CGPDFArrayRef?
+            if (CGPDFDictionaryGetArray(dict, key, &cfArrayValue)), let cfArray = cfArrayValue {
+                var array = [String]()
+                for i in 0..<CGPDFArrayGetCount(cfArray) {
+                    var cfItemValue: CGPDFStringRef?
+                    if CGPDFArrayGetString(cfArray, i, &cfItemValue), let item = cfItemValue.flatMap({ CGPDFStringCopyTextString($0) }) {
+                        array.append(item as String)
+                    }
+                }
+                return array.joined(separator: ", ")
             }
             return nil
         }
         
         func convertDate(_ date: String?) -> Date? {
             guard let date = date else { return nil }
-            var dateStr = date
-            if dateStr.hasPrefix("D:") {
-                dateStr.characters.removeFirst(2)
-            }
+            let dateStr = date.replacingOccurrences(of: "'", with: "").replacingOccurrences(of: "D:", with: "", options: .anchored)
             let dateFormatter = DateFormatter()
-            dateFormatter.dateFormat = "yyyyMMddHHmmssTZD"
-            if let result = dateFormatter.date(from: dateStr) {
-                return result
-            }
-            dateFormatter.dateFormat = "yyyyMMddHHmmss"
-            if let result = dateFormatter.date(from: dateStr) {
-                return result
+            let formats: [String] = ["yyyyMMddHHmmssTZ", "yyyyMMddHHmmssZZZZZ", "yyyyMMddHHmmssZ", "yyyyMMddHHmmss"]
+            for format in formats {
+                dateFormatter.dateFormat = format
+                if let result = dateFormatter.date(from: dateStr) {
+                    return result
+                }
             }
             return nil
         }
         
-        if let provider = CGDataProvider(url: fileURL as CFURL), let reference = CGPDFDocument(provider), let dict = reference.info {
-            add(key: "Title", value: getKey("Title", from: dict))
-            add(key: "Author", value: getKey("Author", from: dict))
-            add(key: "Subject", value: getKey("Subject", from: dict))
-            var majorVersion: Int32 = 0
-            var minorVersion: Int32 = 0
-            reference.getVersion(majorVersion: &majorVersion, minorVersion: &minorVersion)
-            if majorVersion > 0 {
-                add(key: "Version", value:  String(majorVersion) + "." + String(minorVersion))
-            }
-            add(key: "Pages", value: reference.numberOfPages)
-            
-            if reference.numberOfPages > 0, let pageRef = reference.page(at: 1) {
-                let size = pageRef.getBoxRect(CGPDFBox.mediaBox).size
-                add(key: "Resolution", value: "\(Int(size.width))x\(Int(size.height))")
-            }
-            add(key: "Content creator", value: getKey("Creator", from: dict))
-            add(key: "Creation date", value: convertDate(getKey("CreationDate", from: dict)))
-            add(key: "Modified date", value: convertDate(getKey("ModDate", from: dict)))
-            add(key: "Security", value: reference.isEncrypted ? "Present" : "None")
-            add(key: "Allows printing", value: reference.allowsPrinting ? "Yes" : "No")
-            add(key: "Allows copying", value: reference.allowsCopying ? "Yes" : "No")
+        guard let provider = CGDataProvider(url: fileURL as CFURL), let reference = CGPDFDocument(provider), let dict = reference.info else {
+            return (dic, keys)
         }
+        add(key: "Title", value: getKey("Title", from: dict))
+        add(key: "Author", value: getKey("Author", from: dict))
+        add(key: "Subject", value: getKey("Subject", from: dict))
+        add(key: "Producer", value: getKey("Producer", from: dict))
+        add(key: "Keywords", value: getKey("Keywords", from: dict))
+        var majorVersion: Int32 = 0
+        var minorVersion: Int32 = 0
+        reference.getVersion(majorVersion: &majorVersion, minorVersion: &minorVersion)
+        if majorVersion > 0 {
+            add(key: "Version", value:  String(majorVersion) + "." + String(minorVersion))
+        }
+        add(key: "Pages", value: reference.numberOfPages)
+        
+        if reference.numberOfPages > 0, let pageRef = reference.page(at: 1) {
+            let size = pageRef.getBoxRect(CGPDFBox.mediaBox).size
+            add(key: "Resolution", value: "\(Int(size.width))x\(Int(size.height))")
+        }
+        add(key: "Content creator", value: getKey("Creator", from: dict))
+        add(key: "Creation date", value: convertDate(getKey("CreationDate", from: dict)))
+        add(key: "Modified date", value: convertDate(getKey("ModDate", from: dict)))
+        add(key: "Security", value: reference.isEncrypted)
+        add(key: "Allows printing", value: reference.allowsPrinting)
+        add(key: "Allows copying", value: reference.allowsCopying)
         return (dic, keys)
     }
     
@@ -465,8 +494,4 @@ public struct LocalFileInformationGenerator {
     /// Properties generator closure for custom type of files.
     /// - Note: No default implementation is avaiable
     static public var customProperties: ((_ fileURL: URL) -> (prop: [String: Any], keys: [String]))? = nil
-}
-
-fileprivate func ~=<T : Equatable>(array: [T], value: T) -> Bool {
-    return array.contains(value)
 }

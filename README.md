@@ -1,22 +1,25 @@
 ![File Provider](fileprovider.png)
 
->This Swift library provide a swifty way to deal with local and remote files and directories in a unified way.
+> This Swift library provide a swifty way to deal with local and remote files and directories in a unified way.
+
+<center>
 
 [![Swift Version][swift-image]][swift-url]
 [![Platform][platform-image]](#)
 [![License][license-image]][license-url]
-
-[![Release versin][release-image]][release-url]
-[![CocoaPods version](https://img.shields.io/cocoapods/v/FileProvider.svg)][cocoapods]
-[![Carthage compatible][carthage-image]](https://github.com/Carthage/Carthage)
-
 [![Build Status][travis-image]][travis-url]
 [![Codebeat Badge][codebeat-image]][codebeat-url]
-[![Cocoapods Docs][docs-image]][docs-url]
+
+[![Release version][release-image]][release-url]
+[![CocoaPods version](https://img.shields.io/cocoapods/v/FilesProvider.svg)][cocoapods]
+[![Carthage compatible][carthage-image]](https://github.com/Carthage/Carthage)
 [![Cocoapods Downloads][cocoapods-downloads]][cocoapods]
 [![Cocoapods Apps][cocoapods-apps]][cocoapods]
 
+</center>
+
 <!--- 
+[![Cocoapods Doc][docs-image]][docs-url]
 [![codecov](https://codecov.io/gh/amosavian/FileProvider/branch/master/graph/badge.svg)](https://codecov.io/gh/amosavian/FileProvider) 
 ---> 
 
@@ -30,33 +33,34 @@ All functions do async calls and it wont block your main thread.
 - [x] **CloudFileProvider** A wrapper around app's ubiquitous container API of iCloud Drive.
 - [x] **WebDAVFileProvider** WebDAV protocol is defacto file transmission standard, supported by some cloud services like `ownCloud`, `Box.com` and `Yandex.disk`.
 - [x] **FTPFileProvider** While deprecated in 1990s due to serious security concerns, it's still in use on some Web hosts.
-    * Active mode is not implemented yet.
 - [x] **DropboxFileProvider** A wrapper around Dropbox Web API.
     * For now it has limitation in uploading files up to 150MB.
 - [x] **OneDriveFileProvider** A wrapper around OneDrive REST API, works with `onedrive.com` and compatible (business) servers.
-    * For now it has limitation in uploading files up to 100MB.
-- [ ] **GoogleFileProvider** A wrapper around Goodle Drive REST API.
 - [ ] **AmazonS3FileProvider** Amazon storage backend. Used by many sites.
+- [ ] **GoogleFileProvider** A wrapper around Goodle Drive REST API.
 - [ ] **SMBFileProvider** SMB2/3 introduced in 2006, which is a file and printer sharing protocol originated from Microsoft Windows and now is replacing AFP protocol on macOS.
     * Data types and some basic functions are implemented but *main interface is not implemented yet!*.
-    * SMB1/CIFS is deprecated and very tricky to be implemented due to strict memory allignment in Swift.
+    * SMBv1/CIFS is insecure, deprecated and kinda tricky to be implemented due to strict memory allignment in Swift.
 
 ## Requirements
 
-- **Swift 3.0 or higher**
+- **Swift 4.0 or higher**
 - iOS 8.0 , OSX 10.10
-- XCode 8.0
+- XCode 9.0
 
 Legacy version is available in swift-2 branch.
 
 ## Installation
+
+### Important: this library has been renamed to avoid conflict in iOS 11, macOS 10.13 and Xcode 9.0. Please read issue [#53](https://github.com/amosavian/FileProvider/issues/53) to find more.
+
 
 ### Cocoapods / Carthage / Swift Package Manager
 
 Add this line to your pods file:
 
 ```ruby
-pod "FileProvider"
+pod "FilesProvider"
 ```
 
 Or add this to Cartfile:
@@ -94,7 +98,7 @@ Then you can do either:
 
 * Copy Source folder to your project and Voila!
 
-* Drop `FileProvider.xcodeproj` to you Xcode workspace and add the framework to your Embeded Binaries in target.
+* Drop `FilesProvider.xcodeproj` to you Xcode workspace and add the framework to your Embeded Binaries in target.
 
 ## Usage
 
@@ -105,6 +109,8 @@ Each provider has a specific class which conforms to FileProvider protocol and s
 For LocalFileProvider if you want to deal with `Documents` folder
 
 ```	swift
+import FilesProvider
+
 let documentsProvider = LocalFileProvider()
 
 // Equals with:
@@ -118,6 +124,8 @@ let documentsProvider = LocalFileProvider(baseURL: documentsURL)
 Also for using group shared container:
 
 ```swift
+import FilesProvider
+
 let documentsProvider = LocalFileProvider(sharedContainerId: "group.yourcompany.appContainer")
 // Replace your group identifier
 ```
@@ -127,6 +135,8 @@ You can't change the base url later. and all paths are related to this base url 
 To initialize an iCloud Container provider look at [here](https://medium.com/ios-os-x-development/icloud-drive-documents-1a46b5706fe1) to see how to update project settings then use below code, This will automatically manager creating Documents folder in container:
 
 ```swift
+import FilesProvider
+
 let documentsProvider = CloudFileProvider(containerId: nil)
 ```
 
@@ -134,11 +144,13 @@ let documentsProvider = CloudFileProvider(containerId: nil)
 For remote file providers authentication may be necessary:
 
 ```	swift
+import FilesProvider
+
 let credential = URLCredential(user: "user", password: "pass", persistence: .permanent)
 let webdavProvider = WebDAVFileProvider(baseURL: URL(string: "http://www.example.com/dav")!, credential: credential)
 ```
 
-* In case you want to connect non-secure servers for WebDAV (http) in iOS 9+ / macOS 10.11+ you should disable App Transport Security (ATS) according to [this guide.](https://gist.github.com/mlynch/284699d676fe9ed0abfa)
+* In case you want to connect non-secure servers for WebDAV (http) or FTP in iOS 9+ / macOS 10.11+ you should disable App Transport Security (ATS) according to [this guide.](https://gist.github.com/mlynch/284699d676fe9ed0abfa)
 
 * For Dropbox & OneDrive, user is clientID and password is Token which both must be retrieved via [OAuth2 API of Dropbox](https://www.dropbox.com/developers/reference/oauth-guide). There are libraries like [p2/OAuth2](https://github.com/p2/OAuth2) or [OAuthSwift](https://github.com/OAuthSwift/OAuthSwift) which can facilate the procedure to retrieve token. The latter is easier to use and prefered.
 	
@@ -229,10 +241,10 @@ To get list of files in a directory:
 documentsProvider.contentsOfDirectory(path: "/", completionHandler: {
 	contents, error in
 	for file in contents {
-		print("Name: \(attributes.name)")
-		print("Size: \(attributes.size)")
-		print("Creation Date: \(attributes.creationDate)")
-		print("Modification Date: \(attributes.modifiedDate)")
+		print("Name: \(file.name)")
+		print("Size: \(file.size)")
+		print("Creation Date: \(file.creationDate)")
+		print("Modification Date: \(file.modifiedDate)")
 	}
 })
 ```
@@ -248,15 +260,6 @@ func storageProperties(completionHandler: { total, used in
 ```
 	
 * if this function is unavailable on provider or an error has been occurred, total space will be reported `-1` and used space `0`
-
-### Change current directory
-
-```swift
-documentsProvider.currentPath = "/New Folder"
-// now path is ~/Documents/New Folder
-```
-	
-You can then pass "" (empty string) to `contentsOfDirectory` method to list files in current directory.
 
 ### Creating File and Folders
 
@@ -296,8 +299,6 @@ documentsProvider.moveItem(path: "new folder/old.txt", to: "new.txt", overwrite:
 documentsProvider.removeItem(path: "new.txt", completionHandler: nil)
 ```
 
-***Caution:*** This method will delete directories with all it's contents recursively except for FTP providers that don't support `SITE RMDIR` command, this will be fixed later.
-
 ### Fetching Contents of File
 
 There is two method for this purpose, one of them loads entire file into `Data` and another can load a portion of file.
@@ -329,7 +330,7 @@ let data = "What's up Newyork!".data(encoding: .utf8)
 documentsProvider.writeContents(path: "old.txt", content: data, atomically: true, completionHandler: nil)
 ```
 
-### Copying Files to and From Local URL
+### Copying Files to and From Local Storage
 
 There are two methods to download and upload files between provider's and local storage. These methods use `URLSessionDownloadTask` and `URLSessionUploadTask` classes and allows to use background session and provide progress via delegate.
 
@@ -349,6 +350,12 @@ documentsProvider.copyItem(path: "/download/image.jpg", toLocalURL: fileURL, ove
 
 * It's safe only to assume these methods **won't** handle directories to upload/download recursively. If you need, you can list directories, create directories on target and copy files using these methods.
 * FTP provider allows developer to either use apple implemented `URLSessionDownloadTask` or custom implemented method based on stream task via `useAppleImplementation` property. FTP protocol is not supported by background session.
+
+### Operation Progress
+
+Creating/Copying/Deleting/Searching functions return a `(NS)Progress`. It provides operation type, progress and a `.cancel()` method which allows you to cancel operation in midst. You can check `cancellable` property to check either you can cancel operation via this object or not.
+
+- **Note:** Progress reporting is not supported by native `(NS)FileManager` so `LocalFileProvider`.
 
 ### Undo Operations
 
@@ -393,12 +400,6 @@ class ViewController: UIViewController
 }
 ```
 
-### Operation Handle
-
-Creating/Copying/Deleting functions return a `OperationHandle` for remote operations. It provides operation type, progress and a `.cancel()` method which allows you to cancel operation in midst.
-
-It's not supported by native `(NS)FileManager` so `LocalFileProvider`, but this functionality will be added to future `PosixFileProvider` class.
-
 ### File Coordination
 
 `LocalFileProvider` and its descendents has a `isCoordinating` property. By setting this, provider will use `NSFileCoordinating` class to do all file operations. It's mandatory for iCloud, while recommended when using shared container or anywhere that simultaneous operations on a file/folder is common.
@@ -409,12 +410,12 @@ You can monitor updates in some file system (Local and SMB2), there is three met
 
 ```swift
 // to register a new notification handler
-documentsProvider.registerNotifcation(path: provider.currentPath) {
+documentsProvider.registerNotifcation(path: "/") {
 	// calling functions to update UI 
 }
 	
 // To discontinue monitoring folders:
-documentsProvider.unregisterNotifcation(path: provider.currentPath)
+documentsProvider.unregisterNotifcation(path: "/")
 ```
 
 * **Please note** in LocalFileProvider it will also monitor changes in subfolders. This behaviour can varies according to file system specification.
@@ -430,9 +431,10 @@ To check either file thumbnail is supported or not and fetch thumbnail, use (and
 
 ```swift
 let path = "/newImage.jpg"
-let thumbSize = CGSize(width: 64, height: 64)
+let thumbSize = CGSize(width: 64, height: 64) // or nil which renders to default dimension of provider
 if documentsProvider.thumbnailOfFileSupported(path: path {
     documentsProvider.thumbnailOfFile(path: file.path, dimension: thumbSize, completionHandler: { (image, error) in
+        // Interacting with UI must be placed in main thread
         DispatchQueue.main.async {
             self.previewImage.image = image
         }
@@ -484,20 +486,27 @@ Distributed under the MIT license. See `LICENSE` for more information.
 
 [https://github.com/amosavian/](https://github.com/amosavian/)
 
-[cocoapods]: https://cocoapods.org/pods/FileProvider
-[swift-image]: https://img.shields.io/badge/swift-3.0,%203.1-orange.svg
+[cocoapods]: https://cocoapods.org/pods/FilesProvider
+[cocoapods-old]: https://cocoapods.org/pods/FileProvider
+[swift-image]: https://img.shields.io/badge/swift-4.0-orange.svg
 [swift-url]: https://swift.org/
-[platform-image]: https://img.shields.io/cocoapods/p/FileProvider.svg
+[platform-image]: https://img.shields.io/cocoapods/p/FilesProvider.svg
 [license-image]: https://img.shields.io/github/license/amosavian/FileProvider.svg
 [license-url]: LICENSE
 [codebeat-image]: https://codebeat.co/badges/7b359f48-78eb-4647-ab22-56262a827517
 [codebeat-url]: https://codebeat.co/projects/github-com-amosavian-fileprovider
-[travis-image]: https://img.shields.io/travis/amosavian/FileProvider/master.svg
+[travis-image]: https://travis-ci.org/amosavian/FileProvider.svg
 [travis-url]: https://travis-ci.org/amosavian/FileProvider
 [release-url]: https://github.com/amosavian/FileProvider/releases
 [release-image]: https://img.shields.io/github/release/amosavian/FileProvider.svg
 [carthage-image]: https://img.shields.io/badge/Carthage-compatible-4BC51D.svg
-[cocoapods-downloads]: https://img.shields.io/cocoapods/dt/FileProvider.svg
-[cocoapods-apps]: https://img.shields.io/cocoapods/at/FileProvider.svg
-[docs-image]: https://img.shields.io/cocoapods/metrics/doc-percent/FileProvider.svg
-[docs-url]: http://cocoadocs.org/docsets/FileProvider/
+[cocoapods-downloads-old]: https://img.shields.io/cocoapods/dt/FileProvider.svg
+[cocoapods-apps-old]: https://img.shields.io/cocoapods/at/FileProvider.svg
+[cocoapods-downloads]: https://img.shields.io/cocoapods/dt/FilesProvider.svg
+[cocoapods-apps]: https://img.shields.io/cocoapods/at/FilesProvider.svg
+[docs-image]: https://img.shields.io/cocoapods/metrics/doc-percent/FilesProvider.svg
+[docs-url]: http://cocoadocs.org/docsets/FilesProvider/
+## Support on Beerpay
+Hey dude! Help me out for a couple of :beers:!
+
+[![Beerpay](https://beerpay.io/amosavian/FileProvider/badge.svg?style=beer-square)](https://beerpay.io/amosavian/FileProvider)  [![Beerpay](https://beerpay.io/amosavian/FileProvider/make-wish.svg?style=flat-square)](https://beerpay.io/amosavian/FileProvider?focus=wish)

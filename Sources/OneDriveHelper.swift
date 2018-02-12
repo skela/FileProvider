@@ -18,53 +18,55 @@ public struct FileProviderOneDriveError: FileProviderHTTPError {
 /// Containts path, url and attributes of a OneDrive file or resource.
 public final class OneDriveFileObject: FileObject {
     internal init(baseURL: URL?, name: String, path: String) {
-        var rpath = path.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? path
-        if rpath.hasPrefix("/") {
-            rpath.remove(at: rpath.startIndex)
-        }
+        let rpath = (URL(string:path)?.appendingPathComponent(name).absoluteString)!.replacingOccurrences(of: "/", with: "", options: .anchored)
         let url = URL(string: rpath, relativeTo: baseURL) ?? URL(string: rpath)!
-        super.init(url: url, name: name, path: path)
+        
+        super.init(url: url, name: name, path: rpath.removingPercentEncoding ?? path)
     }
     
-    internal convenience init? (baseURL: URL?, drive: String, jsonStr: String) {
+    internal convenience init? (baseURL: URL?, route: OneDriveFileProvider.Route, jsonStr: String) {
         guard let json = jsonStr.deserializeJSON() else { return nil }
-        self.init(baseURL: baseURL, drive: drive, json: json)
+        self.init(baseURL: baseURL, route: route, json: json)
     }
     
-    internal convenience init? (baseURL: URL?, drive: String, json: [String: AnyObject]) {
+    internal convenience init? (baseURL: URL?, route: OneDriveFileProvider.Route, json: [String: AnyObject]) {
         guard let name = json["name"] as? String else { return nil }
-        guard let path = (json["parentReference"] as? NSDictionary)?["path"] as? String else { return nil }
-        var lPath = path.replacingOccurrences(of: "/drive/\(drive)", with: "/", options: .anchored, range: nil)
+        guard let path = json["parentReference"]?["path"] as? String else { return nil }
+        var lPath = path.replacingOccurrences(of: route.drivePath, with: "", options: .anchored, range: nil)
         lPath = lPath.replacingOccurrences(of: "/:", with: "", options: .anchored)
         lPath = lPath.replacingOccurrences(of: "//", with: "", options: .anchored)
         self.init(baseURL: baseURL, name: name, path: lPath)
         self.size = (json["size"] as? NSNumber)?.int64Value ?? -1
-        self.modifiedDate = Date(rfcString: json["lastModifiedDateTime"] as? String ?? "")
-        self.creationDate = Date(rfcString: json["createdDateTime"] as? String ?? "")
-        self.type = (json["folder"] as? String) != nil ? .directory : .regular
+        self.childrensCount = json["folder"]?["childCount"] as? Int
+        self.modifiedDate = (json["lastModifiedDateTime"] as? String).flatMap { Date(rfcString: $0) }
+        self.creationDate = (json["createdDateTime"] as? String).flatMap { Date(rfcString: $0) }
+        self.type = json["folder"] != nil ? .directory : .regular
+        self.contentType = (json["file"]?["mimeType"] as? String).flatMap(ContentMIMEType.init(rawValue:)) ?? .stream
         self.id = json["id"] as? String
         self.entryTag = json["eTag"] as? String
+        let hashes = json["file"]?["hashes"] as? NSDictionary
+        // checks for both sha1 or quickXor. First is available in personal drives, second in business one.
+        self.hash = (hashes?["sha1Hash"] as? String) ?? (hashes?["quickXorHash"] as? String)
     }
     
     /// The document identifier is a value assigned by the OneDrive to a file.
     /// This value is used to identify the document regardless of where it is moved on a volume.
-    /// The identifier persists across system restarts.
     open internal(set) var id: String? {
         get {
-            return allValues[.documentIdentifierKey] as? String
+            return allValues[.fileResourceIdentifierKey] as? String
         }
         set {
-            allValues[.documentIdentifierKey] = newValue
+            allValues[.fileResourceIdentifierKey] = newValue
         }
     }
     
     /// MIME type of file contents returned by OneDrive server.
-    open internal(set) var contentType: String {
+    open internal(set) var contentType: ContentMIMEType {
         get {
-            return allValues[.mimeTypeKey] as? String ?? ""
+            return (allValues[.mimeTypeKey] as? String).flatMap(ContentMIMEType.init(rawValue:)) ?? .stream
         }
         set {
-            allValues[.mimeTypeKey] = newValue
+            allValues[.mimeTypeKey] = newValue.rawValue
         }
     }
     
@@ -77,116 +79,179 @@ public final class OneDriveFileObject: FileObject {
             allValues[.entryTagKey] = newValue
         }
     }
+    
+    /// Calculated hash from OneDrive server. Hex string SHA1 in personal or Base65 string [QuickXOR](https://dev.onedrive.com/snippets/quickxorhash.htm) in business drives.
+    open internal(set) var hash: String? {
+        get {
+            return allValues[.documentIdentifierKey] as? String
+        }
+        set {
+            allValues[.documentIdentifierKey] = newValue
+        }
+    }
 }
 
-// codebeat:disable[ARITY]
 internal extension OneDriveFileProvider {
-    func list(_ path: String, cursor: URL? = nil, prevContents: [OneDriveFileObject] = [], completionHandler: @escaping ((_ contents: [FileObject], _ cursor: String?, _ error: Error?) -> Void)) {
-        let url = cursor ?? self.url(of: path, modifier: "children")
-        var request = URLRequest(url: url)
-        request.httpMethod = "GET"
-        request.set(httpAuthentication: credential, with: .oAuth2)
-        let task = session.dataTask(with: request, completionHandler: { (data, response, error) in
-            var responseError: FileProviderOneDriveError?
-            var files = prevContents
-            if let code = (response as? HTTPURLResponse)?.statusCode , code >= 300, let rCode = FileProviderHTTPErrorCode(rawValue: code) {
-                responseError = FileProviderOneDriveError(code: rCode, path: path, errorDescription: String(data: data ?? Data(), encoding: .utf8))
-            }
-            if let json = data?.deserializeJSON() {
-                if let entries = json["value"] as? [AnyObject] , entries.count > 0 {
-                    for entry in entries {
-                        if let entry = entry as? [String: AnyObject], let file = OneDriveFileObject(baseURL: self.baseURL, drive: self.drive, json: entry) {
-                            files.append(file)
-                        }
-                    }
-                    let ncursor: URL? = (json["@odata.nextLink"] as? String).flatMap { URL(string: $0) }
-                    let hasmore = ncursor != nil
-                    if hasmore {
-                        self.list(path, cursor: ncursor, prevContents: files, completionHandler: completionHandler)
-                        return
-                    }
-                }
-            }
-            completionHandler(files, nil, responseError ?? error)
-        })
-        task.taskDescription = FileOperationType.fetch(path: path).json
-        task.resume()
+    internal func upload_multipart_data(_ targetPath: String, data: Data, operation: FileOperationType,
+                                        overwrite: Bool, completionHandler: SimpleCompletionHandler) -> Progress? {
+        return self.upload_multipart(targetPath, operation: operation, size: Int64(data.count), overwrite: overwrite, dataProvider: {
+            let range = $0.clamped(to: 0..<Int64(data.count))
+            return data[range]
+        }, completionHandler: completionHandler)
     }
     
-    func upload_simple(_ targetPath: String, data: Data? = nil , localFile: URL? = nil, modifiedDate: Date = Date(), overwrite: Bool, operation: FileOperationType, completionHandler: SimpleCompletionHandler) -> OperationHandle? {
-        let size = data?.count ?? (try? localFile?.resourceValues(forKeys: [.fileSizeKey]))??.fileSize ?? -1
-        if size > 100 * 1024 * 1024 {
-            let error = FileProviderOneDriveError(code: .payloadTooLarge, path: targetPath, errorDescription: nil)
-            completionHandler?(error)
-            self.delegateNotify(.create(path: targetPath), error: error)
-            return nil
+    internal func upload_multipart_file(_ targetPath: String, file: URL, operation: FileOperationType,
+                                        overwrite: Bool, completionHandler: SimpleCompletionHandler) -> Progress? {
+        // upload task can't handle uploading file
+        
+        return self.upload_multipart(targetPath, operation: operation, size: file.fileSize, overwrite: overwrite, dataProvider: { range in
+            guard let handle = FileHandle(forReadingAtPath: file.path) else {
+                throw self.cocoaError(targetPath, code: .fileNoSuchFile)
+            }
+            
+            defer {
+                handle.closeFile()
+            }
+            
+            let offset = range.lowerBound
+            handle.seek(toFileOffset: UInt64(offset))
+            guard Int64(handle.offsetInFile) == offset else {
+                throw self.cocoaError(targetPath, code: .fileReadTooLarge)
+            }
+            
+            return handle.readData(ofLength: range.count)
+        }, completionHandler: completionHandler)
+    }
+    
+    private func upload_multipart(_ targetPath: String, operation: FileOperationType, size: Int64, overwrite: Bool,
+                                  dataProvider: @escaping (Range<Int64>) throws -> Data, completionHandler: SimpleCompletionHandler) -> Progress? {
+        guard size > 0 else { return nil }
+        
+        let progress = Progress(totalUnitCount: size)
+        progress.setUserInfoObject(operation, forKey: .fileProvderOperationTypeKey)
+        progress.kind = .file
+        progress.setUserInfoObject(Progress.FileOperationKind.downloading, forKey: .fileOperationKindKey)
+        
+        let createURL = self.url(of: targetPath, modifier: "createUploadSession")
+        var createRequest = URLRequest(url: createURL)
+        createRequest.httpMethod = "POST"
+        if overwrite {
+            createRequest.httpBody = Data(jsonDictionary: ["item": ["@microsoft.graph.conflictBehavior": "replace"] as NSDictionary])
+        } else {
+            createRequest.httpBody = Data(jsonDictionary: ["item": ["@microsoft.graph.conflictBehavior": "fail"] as NSDictionary])
         }
-        let queryStr = overwrite ? "" : "?@name.conflictBehavior=fail"
-        let url = self.url(of: targetPath, modifier: "content\(queryStr)")
+        let createSessionTask = session.dataTask(with: createRequest) { (data, response, error) in
+            if let error = error {
+                completionHandler?(error)
+                return
+            }
+            
+            if let data = data, let json = data.deserializeJSON(),
+                let uploadURL = (json["uploadUrl"] as? String).flatMap(URL.init(string:)) {
+                self.upload_multipart(url: uploadURL, operation: operation, size: Int64(data.count), progress: progress, dataProvider: dataProvider, completionHandler: completionHandler)
+            }
+        }
+        createSessionTask.resume()
+        
+        return progress
+    }
+    
+    private func upload_multipart(url: URL, operation: FileOperationType, size: Int64, range: Range<Int64>? = nil, uploadedSoFar: Int64 = 0,
+                                  progress: Progress, dataProvider: @escaping (Range<Int64>) throws -> Data, completionHandler: SimpleCompletionHandler) {
+        guard !progress.isCancelled else { return }
+        var progress = progress
+        
+        let maximumSize: Int64 = 10_485_760 // Recommended by OneDrive documentations and divides evenly by 320 KiB, max 60MiB.
         var request = URLRequest(url: url)
         request.httpMethod = "PUT"
-        request.set(httpAuthentication: credential, with: .oAuth2)
-        request.set(contentType: .stream)
-        let task: URLSessionUploadTask
-        if let data = data {
-            task = session.uploadTask(with: request, from: data)
-        } else if  let localFile = localFile {
-            task = session.uploadTask(with: request, fromFile: localFile)
+        
+        let finalRange: Range<Int64>
+        if let range = range {
+            if range.count > maximumSize {
+                finalRange = range.lowerBound..<(range.upperBound + maximumSize)
+            } else {
+                finalRange = range
+            }
         } else {
-            return nil
+            finalRange = 0..<min(maximumSize, size)
+        }
+        request.setValue(contentRange: finalRange, totalBytes: size)
+        
+        let data: Data
+        do {
+            data = try dataProvider(finalRange)
+        } catch {
+            dispatch_queue.async {
+                completionHandler?(error)
+            }
+            self.delegateNotify(operation, error: error)
+            return
+        }
+        let task = session.uploadTask(with: request, from: data)
+        
+        var dictionary: [String: AnyObject] = ["type": operation.description as NSString]
+        dictionary["source"] = operation.source as NSString?
+        dictionary["dest"] = operation.destination as NSString?
+        dictionary["uploadedBytes"] = uploadedSoFar as NSNumber
+        dictionary["totalBytes"] = data.count as NSNumber
+        task.taskDescription = String(jsonDictionary: dictionary)
+        task.addObserver(self.sessionDelegate!, forKeyPath: #keyPath(URLSessionTask.countOfBytesSent), options: .new, context: &progress)
+        progress.cancellationHandler = { [weak task, weak self] in
+            task?.cancel()
+            var deleteRequest = URLRequest(url: url)
+            deleteRequest.httpMethod = "DELETE"
+            self?.session.dataTask(with: deleteRequest).resume()
+        }
+        progress.setUserInfoObject(Date(), forKey: .startingTimeKey)
+        
+        var allData = Data()
+        dataCompletionHandlersForTasks[session.sessionDescription!]?[task.taskIdentifier] = { data in
+            allData.append(data)
+        }
+        // We retain self here intentionally to allow resuming upload, This behavior may change anytime!
+        completionHandlersForTasks[session.sessionDescription!]?[task.taskIdentifier] = { [weak task] error in
+            if let error = error {
+                progress.cancel()
+                completionHandler?(error)
+                self.delegateNotify(operation, error: error)
+                return
+            }
+            
+            guard let json = allData.deserializeJSON() else {
+                let error = URLError(.badServerResponse, userInfo: [NSURLErrorKey: url, NSURLErrorFailingURLErrorKey: url, NSURLErrorFailingURLStringErrorKey: url.absoluteString])
+                completionHandler?(error)
+                self.delegateNotify(operation, error: error)
+                return
+            }
+            
+            if let _ = json["error"] {
+                let code = ((task?.response as? HTTPURLResponse)?.statusCode).flatMap(FileProviderHTTPErrorCode.init(rawValue:)) ?? .badRequest
+                let error = self.serverError(with: code, path: self.relativePathOf(url: url), data: allData)
+                completionHandler?(error)
+                self.delegateNotify(operation, error: error)
+                return
+            }
+            
+            if let ranges = json["nextExpectedRanges"] as? [String], let firstRange = ranges.first {
+                let uploaded = uploadedSoFar + Int64(finalRange.count)
+                let comp = firstRange.components(separatedBy: "-")
+                let lower = comp.first.flatMap(Int64.init) ?? uploaded
+                let upper = comp.dropFirst().first.flatMap(Int64.init) ?? Int64.max
+                let range = Range<Int64>(uncheckedBounds: (lower: lower, upper: upper))
+                self.upload_multipart(url: url, operation: operation, size: size, range: range, uploadedSoFar: uploaded, progress: progress,
+                                      dataProvider: dataProvider, completionHandler: completionHandler)
+                return
+            }
+            
+            if let _ = json["id"] as? String {
+                completionHandler?(nil)
+                self.delegateNotify(operation)
+            }
         }
         
-        completionHandlersForTasks[session.sessionDescription!]?[task.taskIdentifier] = { [weak self] error in
-            var responseError: FileProviderOneDriveError?
-            if let code = (task.response as? HTTPURLResponse)?.statusCode , code >= 300, let rCode = FileProviderHTTPErrorCode(rawValue: code) {
-                // We can't fetch server result from delegate!
-                responseError = FileProviderOneDriveError(code: rCode, path: targetPath, errorDescription: nil)
-            }
-            completionHandler?(responseError ?? error)
-            self?.delegateNotify(.create(path: targetPath), error: responseError ?? error)
-        }
-        task.taskDescription = operation.json
         task.resume()
-        return RemoteOperationHandle(operationType: operation, tasks: [task])
     }
     
-    func search(_ startPath: String = "", query: String, next: URL? = nil, foundItem:@escaping ((_ file: OneDriveFileObject) -> Void), completionHandler: @escaping ((_ error: Error?) -> Void)) {
-        let url: URL
-        let q = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed)!
-        url = next ?? self.url(of: startPath, modifier: "view.search?q=\(q)")
-        var request = URLRequest(url: url)
-        request.httpMethod = "GET"
-        request.set(httpAuthentication: credential, with: .oAuth2)
-        
-        let task = session.dataTask(with: request, completionHandler: { (data, response, error) in
-            var responseError: FileProviderOneDriveError?
-            if let code = (response as? HTTPURLResponse)?.statusCode , code >= 300, let rCode = FileProviderHTTPErrorCode(rawValue: code) {
-                responseError = FileProviderOneDriveError(code: rCode, path: startPath, errorDescription: String(data: data ?? Data(), encoding: .utf8))
-            }
-            if let json = data?.deserializeJSON() {
-                if let entries = json["value"] as? [AnyObject] , entries.count > 0 {
-                    for entry in entries {
-                        if let entry = entry as? [String: AnyObject], let file = OneDriveFileObject(baseURL: self.baseURL, drive: self.drive, json: entry) {
-                            foundItem(file)
-                        }
-                    }
-                    let next: URL? = (json["@odata.nextLink"] as? String).flatMap { URL(string: $0) }
-                    if let next = next {
-                        self.search(startPath, query: query, next: next, foundItem: foundItem, completionHandler: completionHandler)
-                    } else {
-                        completionHandler(responseError ?? error)
-                    }
-                    return
-                }
-            }
-            completionHandler(responseError ?? error)
-        }) 
-        task.resume()
-    }
-}
-// codebeat:enable[ARITY]
-
-internal extension OneDriveFileProvider {
     static let dateFormatter = DateFormatter()
     static let decimalFormatter = NumberFormatter()
     
@@ -257,15 +322,5 @@ internal extension OneDriveFileProvider {
         add(key: "Bitrate", value: (json["video"] as? NSDictionary)?["bitrate"] as? Int)
         
         return (dic, keys)
-    }
-    
-    func delegateNotify(_ operation: FileOperationType, error: Error?) {
-        DispatchQueue.main.async(execute: {
-            if error == nil {
-                self.delegate?.fileproviderSucceed(self, operation: operation)
-            } else {
-                self.delegate?.fileproviderFailed(self, operation: operation)
-            }
-        })
     }
 }

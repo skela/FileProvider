@@ -12,6 +12,8 @@ extension SMB2 {
     // MARK: SMB2 Tree Connect
     
     struct TreeConnectRequest: SMBRequestBody {
+        static var command: SMB2.Command = .TREE_CONNECT
+        
         let header: TreeConnectRequest.Header
         let buffer: Data?
         var path: String {
@@ -26,7 +28,7 @@ extension SMB2 {
                 return nil
             }
             self.header = header
-            let path = "\\\\\(host)\\\(share)"
+            let path = "\\\\" + host + "\\" + share
             self.buffer = path.data(using: .utf16)
         }
         
@@ -125,6 +127,8 @@ extension SMB2 {
     // MARK: SMB2 Tree Disconnect
     
     struct TreeDisconnect: SMBRequestBody, SMBResponseBody {
+        static var command: SMB2.Command = .TREE_DISCONNECT
+        
         let size: UInt16
         let reserved: UInt16
         

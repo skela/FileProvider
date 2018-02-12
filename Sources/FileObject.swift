@@ -33,7 +33,7 @@ open class FileObject: Equatable {
             if let url = allValues[.fileURLKey] as? URL {
                 return url
             } else {
-                let path = self.path.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? self.path
+                let path = self.path.addingPercentEncoding(withAllowedCharacters: .filePathAllowed) ?? self.path
                 return URL(string: path) ?? URL(string: "/")!
             }
         }
@@ -72,6 +72,16 @@ open class FileObject: Equatable {
         }
     }
     
+    /// Count of children items of a driectory.
+    open internal(set) var childrensCount: Int? {
+        get {
+            return allValues[.childrensCount] as? Int
+        }
+        set {
+            allValues[.childrensCount] = newValue
+        }
+    }
+    
     /// The time contents of file has been created, returns nil if not set
     open internal(set) var creationDate: Date? {
         get {
@@ -93,9 +103,9 @@ open class FileObject: Equatable {
     }
     
     /// return resource type of file, usually directory, regular or symLink
-    open internal(set) var type: URLFileResourceType? {
+    open internal(set) var type: URLFileResourceType {
         get {
-            return allValues[.fileResourceTypeKey] as? URLFileResourceType
+            return allValues[.fileResourceTypeKey] as? URLFileResourceType ?? .unknown
         }
         set {
             allValues[.fileResourceTypeKey] = newValue
@@ -143,19 +153,30 @@ open class FileObject: Equatable {
         if rhs === lhs  {
             return true
         }
+        #if swift(>=3.1)
+        if Swift.type(of: lhs) != Swift.type(of: rhs) {
+            return false
+        }
+        #else
         if type(of: lhs) != type(of: rhs) {
             return false
         }
+        #endif
+        
         if let rurl = rhs.allValues[.fileURLKey] as? URL, let lurl = lhs.allValues[.fileURLKey] as? URL {
-            return rurl == lurl
+            return rurl == lurl && rhs.size == lhs.size
         }
         return rhs.path == lhs.path && rhs.size == lhs.size && rhs.modifiedDate == lhs.modifiedDate
     }
     
     internal func mapPredicate() -> [String: Any] {
-        let mapDict: [URLResourceKey: String] = [.fileURLKey: "url", .nameKey: "name", .pathKey: "path", .fileSizeKey: "filesize", .creationDateKey: "creationDate",
-                                                 .contentModificationDateKey: "modifiedDate", .isHiddenKey: "isHidden", .isWritableKey: "isWritable", .serverDateKey: "serverDate", .entryTagKey: "entryTag", .mimeTypeKey: "mimeType"]
-        let typeDict: [URLFileResourceType: String] = [.directory: "directory", .regular: "regular", .symbolicLink: "symbolicLink", .unknown: "unknown"]
+        let mapDict: [URLResourceKey: String] = [.fileURLKey: "url", .nameKey: "name", .pathKey: "path",
+                                                 .fileSizeKey: "fileSize", .creationDateKey: "creationDate",
+                                                 .contentModificationDateKey: "modifiedDate", .isHiddenKey: "isHidden",
+                                                 .isWritableKey: "isWritable", .serverDateKey: "serverDate",
+                                                 .entryTagKey: "entryTag", .mimeTypeKey: "mimeType"]
+        let typeDict: [URLFileResourceType: String] = [.directory: "directory", .regular: "regular",
+                                                       .symbolicLink: "symbolicLink", .unknown: "unknown"]
         var result = [String: Any]()
         for (key, value) in allValues {
             if let convertkey = mapDict[key] {
@@ -163,19 +184,22 @@ open class FileObject: Equatable {
             }
         }
         result["eTag"] = result["entryTag"]
+        result["filesize"] = result["fileSize"]
         result["isReadOnly"] = self.isReadOnly
         result["isDirectory"] = self.isDirectory
         result["isRegularFile"] = self.isRegularFile
         result["isSymLink"] = self.isSymLink
-        result["type"] = typeDict[self.type ?? .unknown] ?? "unknown"
+        result["type"] = typeDict[self.type] ?? "unknown"
         return result
     }
     
     /// Converts macOS spotlight query for searching files to a query that can be used for `searchFiles()` method
     static public func convertPredicate(fromSpotlight query: NSPredicate) -> NSPredicate {
-        let mapDict: [String: URLResourceKey] = [NSMetadataItemURLKey: .fileURLKey, NSMetadataItemFSNameKey: .nameKey, NSMetadataItemPathKey: .pathKey,
-                                                 NSMetadataItemFSSizeKey: .fileSizeKey, NSMetadataItemFSCreationDateKey: .creationDateKey,
-                                                 NSMetadataItemFSContentChangeDateKey: .contentModificationDateKey, "kMDItemFSInvisible": .isHiddenKey, "kMDItemFSIsWriteable": .isWritableKey, "kMDItemKind": .mimeTypeKey]
+        let mapDict: [String: URLResourceKey] = [NSMetadataItemURLKey: .fileURLKey, NSMetadataItemFSNameKey: .nameKey,
+                                                 NSMetadataItemPathKey: .pathKey, NSMetadataItemFSSizeKey: .fileSizeKey,
+                                                 NSMetadataItemFSCreationDateKey: .creationDateKey, NSMetadataItemFSContentChangeDateKey: .contentModificationDateKey,
+                                                 "kMDItemFSInvisible": .isHiddenKey, "kMDItemFSIsWriteable": .isWritableKey,
+                                                 "kMDItemKind": .mimeTypeKey]
         
         if let cQuery = query as? NSCompoundPredicate {
             let newSub = cQuery.subpredicates.map { convertPredicate(fromSpotlight: $0 as! NSPredicate) }
@@ -199,6 +223,97 @@ open class FileObject: Equatable {
         }
     }
 }
+
+/// Containts attributes of a provider.
+open class VolumeObject {
+    /// A `Dictionary` contains volume information,  using `URLResourceKey` keys.
+    open internal(set) var allValues: [URLResourceKey: Any]
+    
+    public init(allValues: [URLResourceKey: Any]) {
+        self.allValues = allValues
+    }
+    
+    /// The root directory of the resource’s volume, returned as an `URL` object.
+    open internal(set) var url: URL? {
+        get {
+            return allValues[.volumeURLKey] as? URL
+        }
+        set {
+            allValues[.volumeURLKey] = newValue
+        }
+    }
+    
+    /// The name of the volume.
+    open internal(set) var name: String? {
+        get {
+            return allValues[.volumeNameKey] as? String
+        }
+        set {
+            allValues[.volumeNameKey] = newValue
+        }
+    }
+
+    
+    /// the volume’s capacity in bytes, return -1 if is undetermined.
+    open internal(set) var totalCapacity: Int64 {
+        get {
+            return allValues[.volumeTotalCapacityKey] as? Int64 ?? -1
+        }
+        set {
+            allValues[.volumeTotalCapacityKey] = newValue
+        }
+    }
+    
+    /// The volume’s available capacity in bytes.
+    open internal(set) var availableCapacity: Int64 {
+        get {
+            return allValues[.volumeAvailableCapacityKey] as? Int64 ?? 0
+        }
+        set {
+            allValues[.volumeAvailableCapacityKey] = newValue
+        }
+    }
+    
+    open internal(set) var usage: Int64 {
+        get {
+            return totalCapacity >= 0 ? totalCapacity - availableCapacity : -availableCapacity
+        }
+        set {
+            availableCapacity = totalCapacity >= 0 ? totalCapacity - newValue : -newValue
+        }
+    }
+    
+    ///  the volume’s creation date, returned as an `Date` object, or NULL if it cannot be determined
+    open internal(set) var creationDate: Date? {
+        get {
+            return allValues[.volumeCreationDateKey] as? Date
+        }
+        set {
+            allValues[.volumeCreationDateKey] = newValue
+        }
+    }
+    
+    /// Determining whether the volume is read-only
+    open internal(set) var isReadOnly: Bool {
+        get {
+            return allValues[.volumeIsReadOnlyKey] as? Bool ?? false
+        }
+        set {
+            allValues[.volumeIsReadOnlyKey] = newValue
+        }
+    }
+    
+    @available(iOS 10.0, macOS 10.12, tvOS 10.0, *)
+    open internal(set) var isEncrypted: Bool {
+        get {
+            return allValues[.volumeIsEncryptedKey] as? Bool ?? false
+        }
+        set {
+            allValues[.volumeIsEncryptedKey] = !newValue
+        }
+    }
+}
+
 
 /// Sorting FileObject array by given criteria, **not thread-safe**
 public struct FileObjectSorting {
