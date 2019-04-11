@@ -6,6 +6,7 @@
 //  Copyright © 2017 Mousavian. Distributed under MIT license.
 //
 
+#if os(macOS) || os(iOS) || os(tvOS)
 import Foundation
 import ImageIO
 import CoreGraphics
@@ -13,7 +14,7 @@ import AVFoundation
 
 extension LocalFileProvider: ExtendedFileProvider {
     open func thumbnailOfFileSupported(path: String) -> Bool {
-        switch (path as NSString).pathExtension.lowercased() {
+        switch path.pathExtension.lowercased() {
         case LocalFileInformationGenerator.imageThumbnailExtensions.contains:
             return true
         case LocalFileInformationGenerator.audioThumbnailExtensions.contains:
@@ -32,7 +33,7 @@ extension LocalFileProvider: ExtendedFileProvider {
     }
     
     open func propertiesOfFileSupported(path: String) -> Bool {
-        let fileExt = (path as NSString).pathExtension.lowercased()
+        let fileExt = path.pathExtension.lowercased()
         switch fileExt {
         case LocalFileInformationGenerator.imagePropertiesExtensions.contains:
             return LocalFileInformationGenerator.imageProperties != nil
@@ -54,7 +55,8 @@ extension LocalFileProvider: ExtendedFileProvider {
         }
     }
     
-    open func thumbnailOfFile(path: String, dimension: CGSize? = nil, completionHandler: @escaping ((_ image: ImageClass?, _ error: Error?) -> Void)) {
+    @discardableResult
+    open func thumbnailOfFile(path: String, dimension: CGSize? = nil, completionHandler: @escaping ((_ image: ImageClass?, _ error: Error?) -> Void)) -> Progress? {
         let dimension = dimension ?? CGSize(width: 64, height: 64)
         (dispatch_queue).async {
             var thumbnailImage: ImageClass? = nil
@@ -63,32 +65,31 @@ extension LocalFileProvider: ExtendedFileProvider {
             // Create Thumbnail and cache
             switch fileURL.pathExtension.lowercased() {
             case LocalFileInformationGenerator.videoThumbnailExtensions.contains:
-                thumbnailImage = LocalFileInformationGenerator.videoThumbnail(fileURL)
+                thumbnailImage = LocalFileInformationGenerator.videoThumbnail(fileURL, dimension)
             case LocalFileInformationGenerator.audioThumbnailExtensions.contains:
-                thumbnailImage = LocalFileInformationGenerator.audioThumbnail(fileURL)
+                thumbnailImage = LocalFileInformationGenerator.audioThumbnail(fileURL, dimension)
             case LocalFileInformationGenerator.imageThumbnailExtensions.contains:
-                thumbnailImage = LocalFileInformationGenerator.imageThumbnail(fileURL)
+                thumbnailImage = LocalFileInformationGenerator.imageThumbnail(fileURL, dimension)
             case LocalFileInformationGenerator.pdfThumbnailExtensions.contains:
-                thumbnailImage = LocalFileInformationGenerator.pdfThumbnail(fileURL)
+                thumbnailImage = LocalFileInformationGenerator.pdfThumbnail(fileURL, dimension)
             case LocalFileInformationGenerator.officeThumbnailExtensions.contains:
-                thumbnailImage = LocalFileInformationGenerator.officeThumbnail(fileURL)
+                thumbnailImage = LocalFileInformationGenerator.officeThumbnail(fileURL, dimension)
             case LocalFileInformationGenerator.customThumbnailExtensions.contains:
-                thumbnailImage = LocalFileInformationGenerator.customThumbnail(fileURL)
+                thumbnailImage = LocalFileInformationGenerator.customThumbnail(fileURL, dimension)
             default:
                 completionHandler(nil, nil)
                 return
             }
             
-            if let image = thumbnailImage {
-                let scaledImage = LocalFileProvider.scaleDown(image: image, toSize: dimension)
-                completionHandler(scaledImage, nil)
-            }
+            completionHandler(thumbnailImage, nil)
         }
+        return nil
     }
     
-    open func propertiesOfFile(path: String, completionHandler: @escaping ((_ propertiesDictionary: [String: Any], _ keys: [String], _ error: Error?) -> Void)) {
+    @discardableResult
+    open func propertiesOfFile(path: String, completionHandler: @escaping ((_ propertiesDictionary: [String: Any], _ keys: [String], _ error: Error?) -> Void)) -> Progress? {
         (dispatch_queue).async {
-            let fileExt = (path as NSString).pathExtension.lowercased()
+            let fileExt = path.pathExtension.lowercased()
             var getter: ((_ fileURL: URL) -> (prop: [String: Any], keys: [String]))?
             switch fileExt {
             case LocalFileInformationGenerator.imagePropertiesExtensions.contains:
@@ -117,6 +118,7 @@ extension LocalFileProvider: ExtendedFileProvider {
             
             completionHandler(dic, keys, nil)
         }
+        return nil
     }
 }
 
@@ -189,23 +191,19 @@ public struct LocalFileInformationGenerator {
     static public var customPropertiesExtensions: [String]  = []
     
     /// Thumbnail generator closure for image files.
-    static public var imageThumbnail: (_ fileURL: URL) -> ImageClass? = { fileURL in
-        return ImageClass(contentsOfFile: fileURL.path)
+    static public var imageThumbnail: (_ fileURL: URL, _ dimension: CGSize?) -> ImageClass? = { fileURL, dimension in
+        return LocalFileProvider.scaleDown(fileURL: fileURL, toSize: dimension)
     }
     
     /// Thumbnail generator closure for audio and music files.
-    static public var audioThumbnail: (_ fileURL: URL) -> ImageClass? = { fileURL in
+    static public var audioThumbnail: (_ fileURL: URL, _ dimension: CGSize?) -> ImageClass? = { fileURL, dimension in
         let playerItem = AVPlayerItem(url: fileURL)
         let metadataList = playerItem.asset.commonMetadata
-        #if swift(>=4.0)
         let commonKeyArtwork = AVMetadataKey.commonKeyArtwork
-        #else
-        let commonKeyArtwork = AVMetadataCommonKeyArtwork
-        #endif
         for item in metadataList {
             if item.commonKey == commonKeyArtwork {
                 if let data = item.dataValue {
-                    return ImageClass(data: data)
+                    return LocalFileProvider.scaleDown(data: data, toSize: dimension)
                 }
             }
         }
@@ -213,9 +211,10 @@ public struct LocalFileInformationGenerator {
     }
     
     /// Thumbnail generator closure for video files.
-    static public var videoThumbnail: (_ fileURL: URL) -> ImageClass? = { fileURL in
+    static public var videoThumbnail: (_ fileURL: URL, _ dimension: CGSize?) -> ImageClass? = { fileURL, dimension in
         let asset = AVAsset(url: fileURL)
         let assetImgGenerate = AVAssetImageGenerator(asset: asset)
+        assetImgGenerate.maximumSize = dimension ?? .zero
         assetImgGenerate.appliesPreferredTrackTransform = true
         let time = CMTime(value: asset.duration.value / 3, timescale: asset.duration.timescale)
         if let cgImage = try? assetImgGenerate.copyCGImage(at: time, actualTime: nil) {
@@ -229,19 +228,19 @@ public struct LocalFileInformationGenerator {
     }
     
     /// Thumbnail generator closure for portable document files files.
-    static public var pdfThumbnail: (_ fileURL: URL) -> ImageClass? = { fileURL in
-        return LocalFileProvider.convertToImage(pdfURL: fileURL)
+    static public var pdfThumbnail: (_ fileURL: URL, _ dimension: CGSize?) -> ImageClass? = { fileURL, dimension in
+        return LocalFileProvider.convertToImage(pdfURL: fileURL, maxSize: dimension)
     }
     
     /// Thumbnail generator closure for office document files.
     /// - Note: No default implementation is avaiable
-    static public var officeThumbnail: (_ fileURL: URL) -> ImageClass? = { fileURL in
+    static public var officeThumbnail: (_ fileURL: URL, _ dimension: CGSize?) -> ImageClass? = { fileURL, dimension in
         return nil
     }
     
     /// Thumbnail generator closure for custom type of files.
     /// - Note: No default implementation is avaiable
-    static public var customThumbnail: (_ fileURL: URL) -> ImageClass? = { fileURL in
+    static public var customThumbnail: (_ fileURL: URL, _ dimension: CGSize?) -> ImageClass? = { fileURL, dimension in
         return nil
     }
     
@@ -271,32 +270,36 @@ public struct LocalFileInformationGenerator {
             return(Int(newTopVal), Int(newBottomVal))
         }
         
-        guard let cgDataRef = CGImageSourceCreateWithURL(fileURL as CFURL, nil), let cfImageDict = CGImageSourceCopyPropertiesAtIndex(cgDataRef, 0, nil) else {
+        guard let source = CGImageSourceCreateWithURL(fileURL as CFURL, nil), let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as NSDictionary? else {
             return (dic, keys)
         }
-        let imageDict = cfImageDict as NSDictionary
-        let tiffDict = imageDict[kCGImagePropertyTIFFDictionary as String] as? NSDictionary ?? [:]
-        let exifDict = imageDict[kCGImagePropertyExifDictionary as String] as? NSDictionary ?? [:]
-        if let pixelWidth = imageDict.object(forKey: kCGImagePropertyPixelWidth) as? NSNumber, let pixelHeight = imageDict.object(forKey: kCGImagePropertyPixelHeight) as? NSNumber {
+        let tiffDict = properties[kCGImagePropertyTIFFDictionary as String] as? NSDictionary ?? [:]
+        let exifDict = properties[kCGImagePropertyExifDictionary as String] as? NSDictionary ?? [:]
+        let gpsDict = properties[kCGImagePropertyGPSDictionary as String] as? NSDictionary ?? [:]
+        
+        if let pixelWidth = properties.object(forKey: kCGImagePropertyPixelWidth) as? NSNumber, let pixelHeight = properties.object(forKey: kCGImagePropertyPixelHeight) as? NSNumber {
             add(key: "Dimensions", value: "\(pixelWidth)x\(pixelHeight)")
         }
-        
-        add(key: "DPI", value: imageDict[kCGImagePropertyDPIWidth as String])
-        add(key: "Device make", value: tiffDict[kCGImagePropertyTIFFMake as String])
+        add(key: "DPI", value: properties[kCGImagePropertyDPIWidth as String])
+        add(key: "Device maker", value: tiffDict[kCGImagePropertyTIFFMake as String])
         add(key: "Device model", value: tiffDict[kCGImagePropertyTIFFModel as String])
         add(key: "Lens model", value: exifDict[kCGImagePropertyExifLensModel as String])
         add(key: "Artist", value: tiffDict[kCGImagePropertyTIFFArtist as String] as? String)
         add(key: "Copyright", value: tiffDict[kCGImagePropertyTIFFCopyright as String] as? String)
         add(key: "Date taken", value: tiffDict[kCGImagePropertyTIFFDateTime as String] as? String)
         
-        if let latitude = tiffDict[kCGImagePropertyGPSLatitude as String] as? NSNumber, let longitude = tiffDict[kCGImagePropertyGPSLongitude as String] as? NSNumber {
-            add(key: "Location", value: "\(latitude), \(longitude)")
+        if let latitude = gpsDict[kCGImagePropertyGPSLatitude as String] as? NSNumber,
+            let longitude = gpsDict[kCGImagePropertyGPSLongitude as String] as? NSNumber {
+            let altitudeDesc = (gpsDict[kCGImagePropertyGPSAltitude as String] as? NSNumber).map({ " at \($0.format(precision: 0))m" }) ?? ""
+            add(key: "Location", value: "\(latitude.format()), \(longitude.format())\(altitudeDesc)")
         }
-        add(key: "Altitude", value: tiffDict[kCGImagePropertyGPSAltitude as String] as? NSNumber)
-        add(key: "Area", value: tiffDict[kCGImagePropertyGPSAreaInformation as String])
+        add(key: "Area", value: gpsDict[kCGImagePropertyGPSAreaInformation as String])
         
-        add(key: "Color space", value: imageDict[kCGImagePropertyColorModel as String])
+        add(key: "Color space", value: properties[kCGImagePropertyColorModel as String])
+        add(key: "Color depth", value: (properties[kCGImagePropertyDepth as String] as? NSNumber).map({ "\($0) bits" }))
+        add(key: "Color profile", value: properties[kCGImagePropertyProfileName as String])
         add(key: "Focal length", value: exifDict[kCGImagePropertyExifFocalLength as String])
+        add(key: "White banance", value: exifDict[kCGImagePropertyExifWhiteBalance as String])
         add(key: "F number", value: exifDict[kCGImagePropertyExifFNumber as String])
         add(key: "Exposure program", value: exifDict[kCGImagePropertyExifExposureProgram as String])
         
@@ -320,7 +323,7 @@ public struct LocalFileInformationGenerator {
             }
         }
         
-        func makeDescription(_ key: String?) -> String? {
+        func makeKeyDescription(_ key: String?) -> String? {
             guard let key = key else {
                 return nil
             }
@@ -331,21 +334,39 @@ public struct LocalFileInformationGenerator {
             return newKey.capitalized
         }
         
+        func parseLocationData(_ value: String) -> (latitude: Double, longitude: Double, height: Double?)? {
+            let scanner = Scanner.init(string: value)
+            var latitude: Double = 0.0, longitude: Double = 0.0, height: Double = 0
+            
+            if scanner.scanDouble(&latitude), scanner.scanDouble(&longitude) {
+                scanner.scanDouble(&height)
+                return (latitude, longitude, height)
+            } else {
+                return nil
+            }
+        }
+        
         guard fileURL.fileExists else {
             return (dic, keys)
         }
         let playerItem = AVPlayerItem(url: fileURL)
         let metadataList = playerItem.asset.commonMetadata
         for item in metadataList {
-            #if swift(>=4.0)
-                let commonKey = item.commonKey?.rawValue
-            #else
-                let commonKey = item.commonKey
-            #endif
-            if let description = makeDescription(commonKey) {
-                if let value = item.stringValue {
-                    keys.append(description)
-                    dic[description] = value
+            let commonKey = item.commonKey?.rawValue
+            if let key = makeKeyDescription(commonKey) {
+                if commonKey == "location", let value = item.stringValue, let loc = parseLocationData(value) {
+                    keys.append(key)
+                    let heightStr: String = (loc.height as NSNumber?).map({ ", \($0.format(precision: 0))m" }) ?? ""
+                    dic[key] = "\((loc.latitude as NSNumber).format())°, \((loc.longitude as NSNumber).format())°\(heightStr)"
+                } else if let value = item.dateValue {
+                    keys.append(key)
+                    dic[key] = value
+                } else if let value = item.numberValue {
+                    keys.append(key)
+                    dic[key] = value
+                } else if let value = item.stringValue {
+                    keys.append(key)
+                    dic[key] = value
                 }
             }
         }
@@ -372,16 +393,12 @@ public struct LocalFileInformationGenerator {
             dic = audioprops.prop
             keys = audioprops.keys
             dic.removeValue(forKey: "Duration")
-            if let index = keys.index(of: "Duration") {
+            if let index = keys.firstIndex(of: "Duration") {
                 keys.remove(at: index)
             }
         }
         let asset = AVURLAsset(url: fileURL, options: nil)
-        #if swift(>=4.0)
         let videoTracks = asset.tracks(withMediaType: AVMediaType.video)
-        #else
-        let videoTracks = asset.tracks(withMediaType: AVMediaTypeVideo)
-        #endif
         if let videoTrack = videoTracks.first {
             var bitrate: Float = 0
             let width = Int(videoTrack.naturalSize.width)
@@ -395,11 +412,7 @@ public struct LocalFileInformationGenerator {
             add(key: "Duration", value: TimeInterval(duration).formatshort)
             add(key: "Video Bitrate", value: "\(Int(ceil(bitrate / 1000))) kbps")
         }
-        #if swift(>=4.0)
         let audioTracks = asset.tracks(withMediaType: AVMediaType.audio)
-        #else
-        let audioTracks = asset.tracks(withMediaType: AVMediaTypeAudio)
-        #endif
         // dic["Audio channels"] = audioTracks.count
         var bitrate: Float = 0
         for track in audioTracks {
@@ -477,7 +490,7 @@ public struct LocalFileInformationGenerator {
         add(key: "Content creator", value: getKey("Creator", from: dict))
         add(key: "Creation date", value: convertDate(getKey("CreationDate", from: dict)))
         add(key: "Modified date", value: convertDate(getKey("ModDate", from: dict)))
-        add(key: "Security", value: reference.isEncrypted)
+        add(key: "Security", value: reference.isEncrypted ? (reference.isUnlocked ? "Present" : "Password Protected") : "None")
         add(key: "Allows printing", value: reference.allowsPrinting)
         add(key: "Allows copying", value: reference.allowsCopying)
         return (dic, keys)
@@ -495,3 +508,4 @@ public struct LocalFileInformationGenerator {
     /// - Note: No default implementation is avaiable
     static public var customProperties: ((_ fileURL: URL) -> (prop: [String: Any], keys: [String]))? = nil
 }
+#endif

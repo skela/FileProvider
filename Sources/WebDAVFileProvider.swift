@@ -7,7 +7,9 @@
 //
 
 import Foundation
+#if os(macOS) || os(iOS) || os(tvOS)
 import CoreGraphics
+#endif
 
 /**
  Allows accessing to WebDAV server files. This provider doesn't cache or save files internally, however you can
@@ -44,11 +46,15 @@ open class WebDAVFileProvider: HTTPFileProvider, FileProviderSharing {
     }
     
     public required convenience init?(coder aDecoder: NSCoder) {
-        guard let baseURL = aDecoder.decodeObject(forKey: "baseURL") as? URL else {
+        guard let baseURL = aDecoder.decodeObject(of: NSURL.self, forKey: "baseURL") as URL? else {
+            if #available(macOS 10.11, iOS 9.0, tvOS 9.0, *) {
+                aDecoder.failWithError(CocoaError(.coderValueNotFound,
+                                                  userInfo: [NSLocalizedDescriptionKey: "Base URL is not set."]))
+            }
             return nil
         }
         self.init(baseURL: baseURL,
-                  credential: aDecoder.decodeObject(forKey: "credential") as? URLCredential)
+                  credential: aDecoder.decodeObject(of: URLCredential.self, forKey: "credential"))
         self.useCache        = aDecoder.decodeBool(forKey: "useCache")
         self.validatingCache = aDecoder.decodeBool(forKey: "validatingCache")
     }
@@ -188,6 +194,7 @@ open class WebDAVFileProvider: HTTPFileProvider, FileProviderSharing {
        - error: `Error` returned by server if occured.
      - Returns: An `Progress` to get progress or cancel progress. Use `completedUnitCount` to iterate count of found items.
      */
+    @discardableResult
     open override func searchFiles(path: String, recursive: Bool, query: NSPredicate, foundItemHandler: ((FileObject) -> Void)?, completionHandler: @escaping ([FileObject], Error?) -> Void) -> Progress? {
         return searchFiles(path: path, recursive: recursive, query: query, including: [], foundItemHandler: foundItemHandler, completionHandler: completionHandler)
     }
@@ -217,6 +224,7 @@ open class WebDAVFileProvider: HTTPFileProvider, FileProviderSharing {
        - error: `Error` returned by server if occured.
      - Returns: An `Progress` to get progress or cancel progress. Use `completedUnitCount` to iterate count of found items.
      */
+    @discardableResult
     open func searchFiles(path: String, recursive: Bool, query: NSPredicate, including: [URLResourceKey], foundItemHandler: ((FileObject) -> Void)?, completionHandler: @escaping (_ files: [FileObject], _ error: Error?) -> Void) -> Progress? {
         let url = self.url(of: path)
         var request = URLRequest(url: url)
@@ -263,7 +271,7 @@ open class WebDAVFileProvider: HTTPFileProvider, FileProviderSharing {
         return progress
     }
     
-    override open func isReachable(completionHandler: @escaping (Bool) -> Void) {
+    override open func isReachable(completionHandler: @escaping (_ success: Bool, _ error: Error?) -> Void) {
         var request = URLRequest(url: baseURL!)
         request.httpMethod = "PROPFIND"
         request.setValue("0", forHTTPHeaderField: "Depth")
@@ -272,14 +280,20 @@ open class WebDAVFileProvider: HTTPFileProvider, FileProviderSharing {
         request.httpBody = WebDavFileObject.xmlProp([.volumeTotalCapacityKey, .volumeAvailableCapacityKey])
         runDataTask(with: request, completionHandler: { (data, response, error) in
             let status = (response as? HTTPURLResponse)?.statusCode ?? 400
-            completionHandler(status < 300)
+            if status >= 400, let code = FileProviderHTTPErrorCode(rawValue: status) {
+                let errorDesc = data.flatMap({ String(data: $0, encoding: .utf8) })
+                let error = FileProviderWebDavError(code: code, path: "", serverDescription: errorDesc, url: self.baseURL!)
+                completionHandler(false, error)
+                return
+            }
+            completionHandler(status < 300, error)
         })
     }
     
     open func publicLink(to path: String, completionHandler: @escaping ((URL?, FileObject?, Date?, Error?) -> Void)) {
         guard self.baseURL?.host?.contains("dav.yandex.") ?? false else {
             dispatch_queue.async {
-                completionHandler(nil, nil, nil, self.urlError(path, code: .resourceUnavailable))
+                completionHandler(nil, nil, nil, URLError(.resourceUnavailable, url: self.url(of: path)))
             }
             return
         }
@@ -360,16 +374,16 @@ open class WebDAVFileProvider: HTTPFileProvider, FileProviderSharing {
     }
     
     override func serverError(with code: FileProviderHTTPErrorCode, path: String?, data: Data?) -> FileProviderHTTPError {
-        return FileProviderWebDavError(code: code, path: path ?? "", errorDescription:  data.flatMap({ String(data: $0, encoding: .utf8) }), url: self.url(of: path ?? ""))
+        return FileProviderWebDavError(code: code, path: path ?? "", serverDescription:  data.flatMap({ String(data: $0, encoding: .utf8) }), url: self.url(of: path ?? ""))
     }
     
-    override func multiStatusHandler(source: String, data: Data, completionHandler: SimpleCompletionHandler) {
+    override func multiStatusError(operation: FileOperationType, data: Data) -> FileProviderHTTPError? {
         let xresponses = DavResponse.parse(xmlResponse: data, baseURL: self.baseURL)
         for xresponse in xresponses where (xresponse.status ?? 0) >= 300 {
             let code = xresponse.status.flatMap { FileProviderHTTPErrorCode(rawValue: $0) } ?? .internalServerError
-            let error = self.serverError(with: code, path: source, data: data)
-            completionHandler?(error)
+            return self.serverError(with: code, path: operation.source, data: data)
         }
+        return nil
     }
     
     /*
@@ -389,20 +403,22 @@ open class WebDAVFileProvider: HTTPFileProvider, FileProviderSharing {
 }
 
 extension WebDAVFileProvider: ExtendedFileProvider {
+    #if os(macOS) || os(iOS) || os(tvOS)
     open func thumbnailOfFileSupported(path: String) -> Bool {
         guard self.baseURL?.host?.contains("dav.yandex.") ?? false else {
             return false
         }
         let supportedExt: [String] = ["jpg", "jpeg", "png", "gif"]
-        return supportedExt.contains((path as NSString).pathExtension)
+        return supportedExt.contains(path.pathExtension)
     }
     
-    open func thumbnailOfFile(path: String, dimension: CGSize?, completionHandler: @escaping ((ImageClass?, Error?) -> Void)) {
+    @discardableResult
+    open func thumbnailOfFile(path: String, dimension: CGSize?, completionHandler: @escaping ((ImageClass?, Error?) -> Void)) -> Progress? {
         guard self.baseURL?.host?.contains("dav.yandex.") ?? false else {
             dispatch_queue.async {
-                completionHandler(nil, self.urlError(path, code: .resourceUnavailable))
+                completionHandler(nil, URLError(.resourceUnavailable, url: self.url(of: path)))
             }
-            return
+            return nil
         }
         
         let dimension = dimension ?? CGSize(width: 64, height: 64)
@@ -421,16 +437,20 @@ extension WebDAVFileProvider: ExtendedFileProvider {
             completionHandler(data.flatMap({ ImageClass(data: $0) }), nil)
         })
         task.resume()
+        return nil
     }
+    #endif
     
     open func propertiesOfFileSupported(path: String) -> Bool {
         return false
     }
     
-    open func propertiesOfFile(path: String, completionHandler: @escaping (([String : Any], [String], Error?) -> Void)) {
+    @discardableResult
+    open func propertiesOfFile(path: String, completionHandler: @escaping (([String : Any], [String], Error?) -> Void)) -> Progress? {
         dispatch_queue.async {
-            completionHandler([:], [], self.urlError(path, code: .resourceUnavailable))
+            completionHandler([:], [], URLError(.resourceUnavailable, url: self.url(of: path)))
         }
+        return nil
     }
 }
 
@@ -447,11 +467,7 @@ struct DavResponse {
     init? (_ node: AEXMLElement, baseURL: URL?) {
         
         func standardizePath(_ str: String) -> String {
-            #if swift(>=4.0)
             let trimmedStr = str.hasPrefix("/") ? String(str[str.index(after: str.startIndex)...]) : str
-            #else
-            let trimmedStr = str.hasPrefix("/") ? str.substring(from: str.index(after: str.startIndex)) : str
-            #endif
             return trimmedStr.addingPercentEncoding(withAllowedCharacters: .filePathAllowed) ?? str
         }
         
@@ -562,7 +578,7 @@ public final class WebDavFileObject: FileObject {
     }
     
     /// MIME type of the file.
-    open internal(set) var contentType: ContentMIMEType {
+    public internal(set) var contentType: ContentMIMEType {
         get {
             return (allValues[.mimeTypeKey] as? String).flatMap(ContentMIMEType.init(rawValue:)) ?? .stream
         }
@@ -572,7 +588,7 @@ public final class WebDavFileObject: FileObject {
     }
     
     /// HTTP E-Tag, can be used to mark changed files.
-    open internal(set) var entryTag: String? {
+    public internal(set) var entryTag: String? {
         get {
             return allValues[.entryTagKey] as? String
         }
@@ -629,7 +645,7 @@ public final class WebDavFileObject: FileObject {
 public struct FileProviderWebDavError: FileProviderHTTPError {
     public let code: FileProviderHTTPErrorCode
     public let path: String
-    public let errorDescription: String?
+    public let serverDescription: String?
     /// URL of resource caused error.
     public let url: URL
 }

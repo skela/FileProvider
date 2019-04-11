@@ -11,7 +11,6 @@ import Foundation
 class SMBFileProvider: FileProvider, FileProviderMonitor {
     open class var type: String { return "SMB" }
     open var baseURL: URL?
-    open var currentPath: String = ""
     open var dispatch_queue: DispatchQueue
     open var operation_queue: OperationQueue
     open weak var delegate: FileProviderDelegate?
@@ -25,11 +24,7 @@ class SMBFileProvider: FileProvider, FileProviderMonitor {
         }
         self.baseURL = baseURL.appendingPathComponent("")
         
-        #if swift(>=3.1)
         let queueLabel = "FileProvider.\(Swift.type(of: self).type)"
-        #else
-        let queueLabel = "FileProvider.\(type(of: self).type)"
-        #endif
         dispatch_queue = DispatchQueue(label: queueLabel, attributes: .concurrent)
         operation_queue = OperationQueue()
         operation_queue.name = "\(queueLabel).Operation"
@@ -38,18 +33,20 @@ class SMBFileProvider: FileProvider, FileProviderMonitor {
     }
     
     public required convenience init?(coder aDecoder: NSCoder) {
-        guard let baseURL = aDecoder.decodeObject(forKey: "baseURL") as? URL else {
+        guard let baseURL = aDecoder.decodeObject(of: NSURL.self, forKey: "baseURL") as URL? else {
+            if #available(macOS 10.11, iOS 9.0, tvOS 9.0, *) {
+                aDecoder.failWithError(CocoaError(.coderValueNotFound,
+                                                  userInfo: [NSLocalizedDescriptionKey: "Base URL is not set."]))
+            }
             return nil
         }
         self.init(baseURL: baseURL,
-                  credential: aDecoder.decodeObject(forKey: "credential") as? URLCredential)
-        self.currentPath   = aDecoder.decodeObject(forKey: "currentPath") as? String ?? ""
+                  credential: aDecoder.decodeObject(of: URLCredential.self, forKey: "credential"))
     }
     
     open func encode(with aCoder: NSCoder) {
         aCoder.encode(self.baseURL, forKey: "baseURL")
         aCoder.encode(self.credential, forKey: "credential")
-        aCoder.encode(self.currentPath, forKey: "currentPath")
     }
     
     public static var supportsSecureCoding: Bool {
@@ -68,7 +65,7 @@ class SMBFileProvider: FileProvider, FileProviderMonitor {
         NotImplemented()
     }
     
-    func isReachable(completionHandler: @escaping (Bool) -> Void) {
+    func isReachable(completionHandler: @escaping (_ success: Bool, _ error: Error?) -> Void) {
         NotImplemented()
     }
     
@@ -138,7 +135,6 @@ class SMBFileProvider: FileProvider, FileProviderMonitor {
     
     open func copy(with zone: NSZone? = nil) -> Any {
         let copy = SMBFileProvider(baseURL: self.baseURL!, credential: self.credential!)!
-        copy.currentPath = self.currentPath
         copy.delegate = self.delegate
         copy.fileOperationDelegate = self.fileOperationDelegate
         return copy

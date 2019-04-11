@@ -28,7 +28,7 @@ class SMBClient: NSObject, StreamDelegate {
     public var timeout: TimeInterval = 30
     
     internal private(set) var messageId: UInt64 = 0
-    private func createMessageId() -> UInt64 {
+    fileprivate func createMessageId() -> UInt64 {
         defer {
             messageId += 1
         }
@@ -36,7 +36,7 @@ class SMBClient: NSObject, StreamDelegate {
     }
     
     internal private(set) var credit: UInt16 = 0
-    private func consumeCredit() -> UInt16 {
+    fileprivate func consumeCredit() -> UInt16 {
         if credit > 0 {
             credit -= 1
             return credit
@@ -90,8 +90,8 @@ class SMBClient: NSObject, StreamDelegate {
         
         inputStream.delegate = self
         outputStream.delegate = self
-        inputStream.schedule(in: RunLoop.main, forMode: .defaultRunLoopMode)
-        outputStream.schedule(in: RunLoop.main, forMode: .defaultRunLoopMode)
+        inputStream.schedule(in: RunLoop.main, forMode: .init("kCFRunLoopDefaultMode"))
+        outputStream.schedule(in: RunLoop.main, forMode: .init("kCFRunLoopDefaultMode"))
         inputStream.open()
         outputStream.open()
         
@@ -101,8 +101,8 @@ class SMBClient: NSObject, StreamDelegate {
     fileprivate func close() {
         self.inputStream?.close()
         self.outputStream?.close()
-        self.inputStream?.remove(from: RunLoop.main, forMode: .defaultRunLoopMode)
-        self.outputStream?.remove(from: RunLoop.main, forMode: .defaultRunLoopMode)
+        self.inputStream?.remove(from: RunLoop.main, forMode: .init("kCFRunLoopDefaultMode"))
+        self.outputStream?.remove(from: RunLoop.main, forMode: .init("kCFRunLoopDefaultMode"))
         self.inputStream?.delegate = nil
         self.outputStream?.delegate = nil
         
@@ -119,9 +119,7 @@ class SMBClient: NSObject, StreamDelegate {
         var data = data
         var byteSent: Int = 0
         while data.count > 0 {
-            let bytesWritten = data.withUnsafeBytes {
-                outputStream.write($0, maxLength: data.count)
-            }
+            let bytesWritten: Int = (try? outputStream.write(data: data)) ?? -1
             
             if bytesWritten > 0 {
                 let range = 0..<bytesWritten
@@ -251,7 +249,7 @@ fileprivate extension SMBClient {
             return (header, SMB2.SetInfoResponse(data: messageData))
         case .OPLOCK_BREAK:
             return (header, nil) // FIXME:
-        case .INVALID:
+        default:
             throw SMBFileProviderError.invalidCommand
         }
     }

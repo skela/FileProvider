@@ -9,9 +9,11 @@
 import Foundation
 #if os(iOS) || os(tvOS)
 import UIKit
+import ImageIO
 public typealias ImageClass = UIImage
 #elseif os(macOS)
 import Cocoa
+import ImageIO
 public typealias ImageClass = NSImage
 #endif
 
@@ -19,7 +21,7 @@ public typealias ImageClass = NSImage
 public typealias SimpleCompletionHandler = ((_ error: Error?) -> Void)?
 
 /// This protocol defines FileProvider neccesary functions and properties to connect and get contents list
-public protocol FileProviderBasic: class, NSSecureCoding {
+public protocol FileProviderBasic: class, NSSecureCoding, CustomDebugStringConvertible {
     /// An string to identify type of provider.
     static var type: String { get }
     
@@ -140,7 +142,7 @@ public protocol FileProviderBasic: class, NSSecureCoding {
     func url(of path: String) -> URL
     
     
-    /// Returns the relative path of url, wothout percent encoding. Even if url is absolute or
+    /// Returns the relative path of url, without percent encoding. Even if url is absolute or
     /// retrieved from another provider, it will try to resolve the url against `baseURL` of
     /// current provider. It's highly recomended to use this method for displaying purposes.
     ///
@@ -153,7 +155,8 @@ public protocol FileProviderBasic: class, NSSecureCoding {
     /// - Note: To prevent race condition, use this method wisely and avoid it as far possible.
     ///
     /// - Parameter success: indicated server is reachable or not.
-    func isReachable(completionHandler: @escaping(_ success: Bool) -> Void)
+    /// - Parameter error: `Error` returned by server if occured.
+    func isReachable(completionHandler: @escaping(_ success: Bool, _ error: Error?) -> Void)
 }
 
 extension FileProviderBasic {
@@ -199,6 +202,13 @@ extension FileProviderBasic {
         set {
             operation_queue.maxConcurrentOperationCount = newValue
         }
+    }
+    
+    public var debugDescription: String {
+        let typeDesc = "\(Self.type) provider"
+        let urlDesc = self.baseURL.map({ " - " + $0.absoluteString }) ?? ""
+        let credentialDesc = self.credential?.user.map({ " - " + $0.debugDescription }) ?? ""
+        return typeDesc + urlDesc + credentialDesc
     }
 }
 
@@ -422,15 +432,7 @@ public protocol FileProviderOperations: FileProviderBasic {
     func copyItem(path: String, toLocalURL: URL, completionHandler: SimpleCompletionHandler) -> Progress?
 }
 
-public extension FileProviderOperations {
-    /// *OBSOLETED:* Use Use FileProviderReadWrite.writeContents(path:, data:, completionHandler:) method instead.
-    @available(*, obsoleted: 0.23, message: "Use FileProviderReadWrite.writeContents(path:, data:, completionHandler:) method instead.")
-    @discardableResult
-    public func create(file: String, at: String, contents data: Data?, completionHandler: SimpleCompletionHandler) -> Progress? {
-        let path = (at as NSString).appendingPathComponent(file)
-        return (self as? FileProviderReadWrite)?.writeContents(path: path, contents: data, completionHandler: completionHandler)
-    }
-    
+extension FileProviderOperations {
     @discardableResult
     public func moveItem(path: String, to: String, completionHandler: SimpleCompletionHandler) -> Progress? {
         return self.moveItem(path: path, to: to, overwrite: false, completionHandler: completionHandler)
@@ -447,7 +449,7 @@ public extension FileProviderOperations {
     }
 }
 
-internal extension FileProviderOperations {
+extension FileProviderOperations {
     internal func delegateNotify(_ operation: FileOperationType, error: Error? = nil) {
         DispatchQueue.main.async(execute: {
             if let error = error {
@@ -576,6 +578,72 @@ extension FileProviderReadWrite {
     }
 }
 
+/// Defines method for fetching file contents progressivly
+public protocol FileProviderReadWriteProgressive {
+    /**
+     Retreives a `Data` object with a portion contents of the file asynchronously vis contents argument of completion handler.
+     If path specifies a directory, or if some other error occurs, data will be nil.
+     
+     - Parameters:
+       - path: Path of file.
+       - progressHandler: a closure which will be called every time a new data received from server.
+         - position: Start position of returned data, indexed from zero.
+         - data: returned `Data` from server.
+       - completionHandler: a closure which will be called after receiving is completed or an error occureed.
+     - Returns: An `Progress` to get progress or cancel progress. Doesn't work on `LocalFileProvider`.
+     */
+    @discardableResult
+    func contents(path: String, progressHandler: @escaping (_ position: Int64, _ data: Data) -> Void, completionHandler: SimpleCompletionHandler) -> Progress?
+    
+    /**
+     Retreives a `Data` object with a portion contents of the file asynchronously vis contents argument of completion handler.
+     If path specifies a directory, or if some other error occurs, data will be nil.
+     
+     - Parameters:
+       - path: Path of file.
+       - responseHandler: a closure which will be called after fetching server response.
+         - response: `URLResponse` returned from server.
+       - progressHandler: a closure which will be called every time a new data received from server.
+         - position: Start position of returned data, indexed from zero.
+         - data: returned `Data` from server.
+       - completionHandler: a closure which will be called after receiving is completed or an error occureed.
+     - Returns: An `Progress` to get progress or cancel progress. Doesn't work on `LocalFileProvider`.
+     */
+    @discardableResult
+    func contents(path: String, responseHandler: ((_ response: URLResponse) -> Void)?, progressHandler: @escaping (_ position: Int64, _ data: Data) -> Void, completionHandler: SimpleCompletionHandler) -> Progress?
+    
+    /**
+     Retreives a `Data` object with a portion contents of the file asynchronously vis contents argument of completion handler.
+     If path specifies a directory, or if some other error occurs, data will be nil.
+     
+     - Parameters:
+       - path: Path of file.
+       - offset: First byte index which should be read. **Starts from 0.**
+       - length: Bytes count of data. Pass `-1` to read until the end of file.
+       - responseHandler: a closure which will be called after fetching server response.
+         - response: `URLResponse` returned from server.
+       - progressHandler: a closure which will be called every time a new data received from server.
+         - position: Start position of returned data, indexed from offset.
+         - data: returned `Data` from server.
+       - completionHandler: a closure which will be called after receiving is completed or an error occureed.
+     - Returns: An `Progress` to get progress or cancel progress. Doesn't work on `LocalFileProvider`.
+     */
+    @discardableResult
+    func contents(path: String, offset: Int64, length: Int, responseHandler: ((_ response: URLResponse) -> Void)?, progressHandler: @escaping (_ position: Int64, _ data: Data) -> Void, completionHandler: SimpleCompletionHandler) -> Progress?
+}
+
+extension FileProviderReadWriteProgressive {
+    @discardableResult
+    public func contents(path: String, progressHandler: @escaping (_ position: Int64, _ data: Data) -> Void, completionHandler: SimpleCompletionHandler) -> Progress? {
+        return contents(path: path, offset: 0, length: -1, responseHandler: nil, progressHandler: progressHandler, completionHandler: completionHandler)
+    }
+    
+    @discardableResult
+    public func contents(path: String, responseHandler: ((_ response: URLResponse) -> Void)?, progressHandler: @escaping (_ position: Int64, _ data: Data) -> Void, completionHandler: SimpleCompletionHandler) -> Progress? {
+        return contents(path: path, offset: 0, length: -1, responseHandler: responseHandler, progressHandler: progressHandler, completionHandler: completionHandler)
+    }
+}
+
 /// Allows a file provider to notify changes occured
 public protocol FileProviderMonitor: FileProviderBasic {
     
@@ -608,6 +676,7 @@ public protocol FileProviderMonitor: FileProviderBasic {
     func isRegisteredForNotification(path: String) -> Bool
 }
 
+#if os(macOS) || os(iOS) || os(tvOS)
 /// Allows undo file operations done by provider
 public protocol FileProvideUndoable: FileProviderOperations {
     /// To initialize undo manager either call `setupUndoManager()` or set it manually.
@@ -624,7 +693,7 @@ public protocol FileProvideUndoable: FileProviderOperations {
     func canUndo(operation: FileOperationType) -> Bool
 }
 
-public extension FileProvideUndoable {
+extension FileProvideUndoable {
     public func canUndo(operation: FileOperationType) -> Bool {
         return undoOperation(for: operation) != nil
     }
@@ -662,7 +731,45 @@ public extension FileProvideUndoable {
         self.undoManager = UndoManager()
         self.undoManager?.levelsOfUndo = 10
     }
+    
+    public func _registerUndo(_ operation: FileOperationType) {
+        #if os(macOS) || os(iOS) || os(tvOS)
+        guard let undoManager = self.undoManager, let undoOp = self.undoOperation(for: operation) else {
+            return
+        }
+        
+        let undoBox = UndoBox(provider: self, operation: operation, undoOperation: undoOp)
+        undoManager.beginUndoGrouping()
+        undoManager.registerUndo(withTarget: undoBox, selector: #selector(UndoBox.doSimpleOperation(_:)), object: undoBox)
+        undoManager.setActionName(operation.actionDescription)
+        undoManager.endUndoGrouping()
+        #endif
+    }
 }
+
+class UndoBox: NSObject {
+    weak var provider: FileProvideUndoable?
+    let operation: FileOperationType
+    let undoOperation: FileOperationType
+    
+    init(provider: FileProvideUndoable, operation: FileOperationType, undoOperation: FileOperationType) {
+        self.provider = provider
+        self.operation = operation
+        self.undoOperation = undoOperation
+    }
+    
+    @objc internal func doSimpleOperation(_ box: UndoBox) {
+        switch self.undoOperation {
+        case .move(source: let source, destination: let dest):
+            _=provider?.moveItem(path: source, to: dest, completionHandler: nil)
+        case .remove(let path):
+            _=provider?.removeItem(path: path, completionHandler: nil)
+        default:
+            break
+        }
+    }
+}
+#endif
 
 /// This protocol defines method to share a public link with other users
 public protocol FileProviderSharing {
@@ -683,6 +790,29 @@ public protocol FileProviderSharing {
     func publicLink(to path: String, completionHandler: @escaping (_ link: URL?, _ attribute: FileObject?, _ expiration: Date?, _ error: Error?) -> Void)
 }
 
+//efines protocol for provider allows symbolic link operations.
+public protocol FileProviderSymbolicLink {
+    /**
+     Creates a symbolic link at the specified path that points to an item at the given path.
+     This method does not traverse symbolic links contained in destination path, making it possible
+     to create symbolic links to locations that do not yet exist.
+     Also, if the final path component is a symbolic link, that link is not followed.
+     
+     - Parameters:
+     - symbolicLink: The file path at which to create the new symbolic link. The last component of the path issued as the name of the link.
+     - withDestinationPath: The path that contains the item to be pointed to by the link. In other words, this is the destination of the link.
+     - completionHandler: If an error parameter was provided, a presentable `Error` will be returned.
+     */
+    func create(symbolicLink path: String, withDestinationPath destPath: String, completionHandler: SimpleCompletionHandler)
+    
+    /// Returns the path of the item pointed to by a symbolic link.
+    ///
+    /// - Parameters:
+    ///   - path: The path of a file or directory.
+    ///   - completionHandler: Returns destination url of given symbolic link, or an `Error` object if it fails.
+    func destination(ofSymbolicLink path: String, completionHandler: @escaping (_ file: FileObject?, _ error: Error?) -> Void)
+}
+
 /// Defines protocol for provider allows all common operations.
 public protocol FileProvider: FileProviderOperations, FileProviderReadWrite, NSCopying {
 }
@@ -690,17 +820,13 @@ public protocol FileProvider: FileProviderOperations, FileProviderReadWrite, NSC
 internal let pathTrimSet = CharacterSet(charactersIn: " /")
 extension FileProviderBasic {
     public var type: String {
-        #if swift(>=3.1)
         return Swift.type(of: self).type
-        #else
-        return type(of: self).type
-        #endif
     }
     
     public func url(of path: String) -> URL {
         var rpath: String = path
         rpath = rpath.addingPercentEncoding(withAllowedCharacters: .filePathAllowed) ?? rpath
-        if let baseURL = baseURL {
+        if let baseURL = baseURL?.absoluteURL {
             if rpath.hasPrefix("/") {
                 rpath.remove(at: rpath.startIndex)
             }
@@ -718,20 +844,12 @@ extension FileProviderBasic {
         }
         
         // resolve url string against baseurl
-        if baseURL?.isFileURL ?? false {
-            guard let baseURL = self.baseURL?.standardizedFileURL else { return url.absoluteString }
-            let standardPath = url.absoluteString.replacingOccurrences(of: "file:///private/var/", with: "file:///var/", options: .anchored)
-            let standardBase = baseURL.absoluteString.replacingOccurrences(of: "file:///private/var/", with: "file:///var/", options: .anchored)
-            let standardRelativePath = standardPath.replacingOccurrences(of: standardBase, with: "/").replacingOccurrences(of: "/", with: "", options: .anchored)
+        guard let baseURL = self.baseURL else { return url.absoluteString }
+        let standardRelativePath = url.absoluteString.replacingOccurrences(of: baseURL.absoluteString, with: "/").replacingOccurrences(of: "/", with: "", options: .anchored)
+        if URLComponents(string: standardRelativePath)?.host?.isEmpty ?? true {
             return standardRelativePath.removingPercentEncoding ?? standardRelativePath
         } else {
-            guard let baseURL = self.baseURL else { return url.absoluteString }
-            let standardRelativePath = url.absoluteString.replacingOccurrences(of: baseURL.absoluteString, with: "/").replacingOccurrences(of: "/", with: "", options: .anchored)
-            if URLComponents(string: standardRelativePath)?.host?.isEmpty ?? true {
-                return standardRelativePath.removingPercentEncoding ?? standardRelativePath
-            } else {
-                return relativePath.replacingOccurrences(of: "/", with: "", options: .anchored)
-            }
+            return relativePath.replacingOccurrences(of: "/", with: "", options: .anchored)
         }
     }
     
@@ -772,17 +890,7 @@ extension FileProviderBasic {
         }
         _ = group.wait(timeout: .now() + 5)
         let finalFile = result + (!fileExt.isEmpty ? "." + fileExt : "")
-        return (dirPath as NSString).appendingPathComponent(finalFile)
-    }
-    
-    internal func urlError(_ path: String, code: URLError.Code) -> Error {
-        let fileURL = self.url(of: path)
-        return URLError(code, userInfo: [NSURLErrorKey: fileURL, NSURLErrorFailingURLErrorKey: fileURL, NSURLErrorFailingURLStringErrorKey: fileURL.absoluteString])
-    }
-    
-    internal func cocoaError(_ path: String, code: CocoaError.Code) -> Error {
-        let fileURL = self.url(of: path)
-        return CocoaError(code, userInfo: [NSFilePathErrorKey: path, NSURLErrorKey: fileURL])
+        return dirPath.appendingPathComponent(finalFile)
     }
     
     internal func NotImplemented(_ fn: String = #function, file: StaticString = #file) {
@@ -792,18 +900,36 @@ extension FileProviderBasic {
 
 /// Define methods to get preview and thumbnail for files or folders
 public protocol ExtendedFileProvider: FileProviderBasic {
-    /// Returuns true if thumbnail preview is supported by provider and file type accordingly.
-    ///
-    /// - Parameter path: path of file.
-    /// - Returns: A `Bool` idicates path can have thumbnail.
-    func thumbnailOfFileSupported(path: String) -> Bool
-    
     /// Returns true if provider supports fetching properties of file like dimensions, duration, etc.
     /// Usually media or document files support these meta-infotmations.
     ///
     /// - Parameter path: path of file.
     /// - Returns: A `Bool` idicates path can have properties.
     func propertiesOfFileSupported(path: String) -> Bool
+    
+    /**
+     Fetching properties of file like dimensions, duration, etc. It's variant depending on file type.
+     Images, videos and audio files meta-information will be returned.
+     
+     - Note: `LocalFileInformationGenerator` variables can be set to change default behavior of
+     thumbnail and properties generator of `LocalFileProvider`.
+     
+     - Parameters:
+     - path: path of file.
+     - completionHandler: a closure with result of preview image or error.
+     - propertiesDictionary: A `Dictionary` of proprty keys and values.
+     - keys: An `Array` contains ordering of keys.
+     - error: Error returned by system.
+     */
+    @discardableResult
+    func propertiesOfFile(path: String, completionHandler: @escaping (_ propertiesDictionary: [String: Any], _ keys: [String], _ error: Error?) -> Void) -> Progress?
+    
+    #if os(macOS) || os(iOS) || os(tvOS)
+    /// Returuns true if thumbnail preview is supported by provider and file type accordingly.
+    ///
+    /// - Parameter path: path of file.
+    /// - Returns: A `Bool` idicates path can have thumbnail.
+    func thumbnailOfFileSupported(path: String) -> Bool
     
     /**
      Generates and returns a thumbnail preview of document asynchronously. The defualt dimension of returned image is different
@@ -815,7 +941,8 @@ public protocol ExtendedFileProvider: FileProviderBasic {
        - image: `NSImage`/`UIImage` object contains preview.
        - error: `Error` returned by system.
     */
-    func thumbnailOfFile(path: String, completionHandler: @escaping (_ image: ImageClass?, _ error: Error?) -> Void)
+    @discardableResult
+    func thumbnailOfFile(path: String, completionHandler: @escaping (_ image: ImageClass?, _ error: Error?) -> Void) -> Progress?
     
     /**
      Generates and returns a thumbnail preview of document asynchronously. The defualt dimension of returned image is different
@@ -831,148 +958,150 @@ public protocol ExtendedFileProvider: FileProviderBasic {
        - image: `NSImage`/`UIImage` object contains preview.
        - error: `Error` returned by system.
      */
-    func thumbnailOfFile(path: String, dimension: CGSize?, completionHandler: @escaping (_ image: ImageClass?, _ error: Error?) -> Void)
-    
-    /**
-     Fetching properties of file like dimensions, duration, etc. It's variant depending on file type.
-     Images, videos and audio files meta-information will be returned.
-     
-     - Note: `LocalFileInformationGenerator` variables can be set to change default behavior of 
-             thumbnail and properties generator of `LocalFileProvider`.
-     
-     - Parameters:
-       - path: path of file.
-       - completionHandler: a closure with result of preview image or error.
-       - propertiesDictionary: A `Dictionary` of proprty keys and values.
-       - keys: An `Array` contains ordering of keys.
-       - error: Error returned by system.
-     */
-    func propertiesOfFile(path: String, completionHandler: @escaping (_ propertiesDictionary: [String: Any], _ keys: [String], _ error: Error?) -> Void)
+    @discardableResult
+    func thumbnailOfFile(path: String, dimension: CGSize?, completionHandler: @escaping (_ image: ImageClass?, _ error: Error?) -> Void) -> Progress?
+    #endif
 }
 
+#if os(macOS) || os(iOS) || os(tvOS)
 extension ExtendedFileProvider {
-    public func thumbnailOfFile(path: String, completionHandler: @escaping ((_ image: ImageClass?, _ error: Error?) -> Void)) {
-        self.thumbnailOfFile(path: path, dimension: nil, completionHandler: completionHandler)
+    @discardableResult
+    public func thumbnailOfFile(path: String, completionHandler: @escaping ((_ image: ImageClass?, _ error: Error?) -> Void)) -> Progress? {
+        return self.thumbnailOfFile(path: path, dimension: nil, completionHandler: completionHandler)
     }
     
-    internal static func convertToImage(pdfData: Data?, page: Int = 1) -> ImageClass? {
+    internal static func convertToImage(pdfData: Data?, page: Int = 1, maxSize: CGSize?) -> ImageClass? {
         guard let pdfData = pdfData else { return nil }
         
         let cfPDFData: CFData = pdfData as CFData
         if let provider = CGDataProvider(data: cfPDFData), let reference = CGPDFDocument(provider), let pageRef = reference.page(at: page) {
-            return self.convertToImage(pdfPage: pageRef)
+            return self.convertToImage(pdfPage: pageRef, maxSize: maxSize)
         }
         return nil
     }
     
-    internal static func convertToImage(pdfURL: URL, page: Int = 1) -> ImageClass? {
+    internal static func convertToImage(pdfURL: URL, page: Int = 1, maxSize: CGSize?) -> ImageClass? {
         // To accelerate, supporting only local file URL
         guard pdfURL.isFileURL else { return nil }
         
         if let reference = CGPDFDocument(pdfURL as CFURL), let pageRef = reference.page(at: page) {
-            return self.convertToImage(pdfPage: pageRef)
+            return self.convertToImage(pdfPage: pageRef, maxSize: maxSize)
         }
         return nil
     }
     
-    private static func convertToImage(pdfPage: CGPDFPage) -> ImageClass? {
+    private static func convertToImage(pdfPage: CGPDFPage, maxSize: CGSize?) -> ImageClass? {
+        let scale: CGFloat
         let frame = pdfPage.getBoxRect(CGPDFBox.mediaBox)
-        var size = frame.size
-        let rect = CGRect(x: 0, y: 0, width: size.width, height: size.height)
-        
+        if let maxSize = maxSize {
+            scale = min(maxSize.width / frame.width, maxSize.height / frame.height)
+        } else {
+            #if os(macOS)
+            scale = NSScreen.main?.backingScaleFactor ?? 1.0 // fetch device is retina or not
+            #else
+            scale = UIScreen.main.scale // fetch device is retina or not
+            #endif
+        }
+        let rect = CGRect(origin: .zero, size: frame.size)
+        let size = CGSize(width: frame.size.width * scale, height: frame.size.height * scale)
+        let transform = pdfPage.getDrawingTransform(CGPDFBox.mediaBox, rect: rect, rotate: 0, preserveAspectRatio: true)
+
         #if os(macOS)
-            #if swift(>=3.2)
-            let ppp = Int(NSScreen.main?.backingScaleFactor ?? 1) // fetch device is retina or not
-            #else
-            let ppp = Int(NSScreen.main()?.backingScaleFactor ?? 1) // fetch device is retina or not
-            #endif
+        let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: Int(size.width), pixelsHigh: Int(size.height),
+                                   bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .calibratedRGB,
+                                   bytesPerRow: 0, bitsPerPixel: 0)
+        
+        guard let context = NSGraphicsContext(bitmapImageRep: rep!) else {
+            return nil
+        }
             
-            size.width  *= CGFloat(ppp)
-            size.height *= CGFloat(ppp)
-            
-            #if swift(>=3.2)
-            let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: Int(size.width), pixelsHigh: Int(size.height),
-                                       bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .calibratedRGB,
-                                       bytesPerRow: 0, bitsPerPixel: 0)
-            #else
-                let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: Int(size.width), pixelsHigh: Int(size.height),
-                                           bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: NSCalibratedRGBColorSpace,
-                                           bytesPerRow: 0, bitsPerPixel: 0)
-            #endif
-            
-            guard let context = NSGraphicsContext(bitmapImageRep: rep!) else {
-                return nil
-            }
-            
-            NSGraphicsContext.saveGraphicsState()
-            #if swift(>=4.0)
-            NSGraphicsContext.current = context
-            #else
-            NSGraphicsContext.setCurrent(context)
-            #endif
-            
-            let transform = pdfPage.getDrawingTransform(CGPDFBox.mediaBox, rect: rect, rotate: 0, preserveAspectRatio: true)
-            context.cgContext.concatenate(transform)
-            
-            context.cgContext.translateBy(x: 0, y: size.height)
-            context.cgContext.scaleBy(x: CGFloat(ppp), y: CGFloat(-ppp))
-            context.cgContext.drawPDFPage(pdfPage)
-            
-            let resultingImage = NSImage(size: size)
-            resultingImage.addRepresentation(rep!)
-            return resultingImage
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = context
+        
+        context.cgContext.concatenate(transform)
+        context.cgContext.translateBy(x: 0, y: size.height)
+        context.cgContext.scaleBy(x: scale, y: -scale)
+        context.cgContext.drawPDFPage(pdfPage)
+        
+        let resultingImage = NSImage(size: size)
+        resultingImage.addRepresentation(rep!)
+        return resultingImage
         #else
-            let ppp = Int(UIScreen.main.scale) // fetch device is retina or not
-            size.width  *= CGFloat(ppp)
-            size.height *= CGFloat(ppp)
+        
+        let handler : (CGContext) -> Void = { context in
+            context.concatenate(transform)
+            context.translateBy(x: 0, y: size.height)
+            context.scaleBy(x: CGFloat(scale), y: CGFloat(-scale))
+            context.setFillColor(UIColor.white.cgColor)
+            context.fill(rect)
+            context.drawPDFPage(pdfPage)
+        }
+        
+        if #available(iOS 10.0, tvOS 10.0, *) {
+            return UIGraphicsImageRenderer(size: size).image { (rendererContext) in
+                handler(rendererContext.cgContext)
+            }
+        } else {
             UIGraphicsBeginImageContext(size)
             guard let context = UIGraphicsGetCurrentContext() else {
                 return nil
             }
             context.saveGState()
-            let transform = pdfPage.getDrawingTransform(CGPDFBox.mediaBox, rect: rect, rotate: 0, preserveAspectRatio: true)
-            context.concatenate(transform)
-            
-            context.translateBy(x: 0, y: size.height)
-            context.scaleBy(x: CGFloat(ppp), y: CGFloat(-ppp))
-            context.setFillColor(UIColor.white.cgColor)
-            context.fill(rect)
-            context.drawPDFPage(pdfPage)
-            
+            handler(context)
             context.restoreGState()
             let resultingImage = UIGraphicsGetImageFromCurrentImageContext()
             UIGraphicsEndImageContext()
             return resultingImage
+        }
         #endif
     }
     
-    internal static func scaleDown(image: ImageClass, toSize maxSize: CGSize) -> ImageClass {
-        let height, width: CGFloat
-        if image.size.width > image.size.height {
-            width = maxSize.width
-            height = (image.size.height / image.size.width) * width
+    internal static func scaleDown(fileURL: URL, toSize maxSize: CGSize?) -> ImageClass? {
+        guard let source = CGImageSourceCreateWithURL(fileURL as CFURL, nil) else {
+            return nil
+        }
+        return scaleDown(source: source, toSize: maxSize)
+    }
+    
+    internal static func scaleDown(data: Data, toSize maxSize: CGSize?) -> ImageClass? {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil) else {
+            return nil
+        }
+        return scaleDown(source: source, toSize: maxSize)
+    }
+    
+    internal static func scaleDown(source: CGImageSource, toSize maxSize: CGSize?) -> ImageClass? {
+        let options: [NSString: Any]
+        if let maxSize = maxSize {
+            let pixelSize: CGFloat
+            let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil)
+            
+            if let width: CGFloat = ((properties as NSDictionary?)?.object(forKey: kCGImagePropertyPixelWidth) as? CGFloat),
+                let height: CGFloat = ((properties as NSDictionary?)?.object(forKey: kCGImagePropertyPixelHeight) as? CGFloat) {
+                pixelSize = (width / maxSize.width < height / maxSize.height) ? maxSize.width : maxSize.height
+            } else {
+                pixelSize = max(maxSize.width, maxSize.height)
+            }
+            
+            options = [
+                kCGImageSourceThumbnailMaxPixelSize: pixelSize,
+                kCGImageSourceCreateThumbnailFromImageAlways: true]
         } else {
-            height = maxSize.height
-            width = (image.size.width / image.size.height) * height
+            options = [
+                kCGImageSourceCreateThumbnailFromImageAlways: true]
         }
         
-        let newSize = CGSize(width: width, height: height)
-        
+        guard let image = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else {
+            return nil
+        }
         #if os(macOS)
-            var imageRect = NSRect(origin: .zero, size: image.size)
-            let imageRef = image.cgImage(forProposedRect: &imageRect, context: nil, hints: nil)
-            
-            // Create NSImage from the CGImage using the new size
-            return NSImage(cgImage: imageRef!, size: newSize)
+        return ImageClass(cgImage: image, size: .zero)
         #else
-            UIGraphicsBeginImageContextWithOptions(newSize, false, 0.0)
-            image.draw(in: CGRect(origin: .zero, size: newSize))
-            let newImage = UIGraphicsGetImageFromCurrentImageContext() ?? image
-            UIGraphicsEndImageContext()
-            return newImage
+        return ImageClass(cgImage: image)
         #endif
     }
 }
+#endif
 
 /// Operation type description of file operation, included files path in associated values.
 public enum FileOperationType: CustomStringConvertible {
@@ -1027,7 +1156,7 @@ public enum FileOperationType: CustomStringConvertible {
         return mirror.children.dropFirst().first?.value as? String
     }
     
-    init? (json: [String: AnyObject]) {
+    init? (json: [String: Any]) {
         guard let type = json["type"] as? String, let source = json["source"] as? String else {
             return nil
         }
@@ -1056,16 +1185,12 @@ public enum FileOperationType: CustomStringConvertible {
     }
     
     internal var json: String? {
-        var dictionary: [String: AnyObject] = ["type": self.description as NSString]
-        dictionary["source"] = source as NSString?
-        dictionary["dest"] = destination as NSString?
+        var dictionary: [String: Any] = ["type": self.description]
+        dictionary["source"] = source
+        dictionary["dest"] = destination
         return String(jsonDictionary: dictionary)
     }
 }
-
-/// Allows to get progress or cancel an in-progress operation, useful for remote providers
-@available(*, obsoleted: 1.0, message: "Use Foudation.Progress class instead.")
-public protocol OperationHandle {}
 
 /// Delegate methods for reporting provider's operation result and progress, when it's ready to update
 /// user interface.

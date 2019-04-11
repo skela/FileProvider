@@ -12,7 +12,7 @@ import Foundation
 public struct FileProviderDropboxError: FileProviderHTTPError {
     public let code: FileProviderHTTPErrorCode
     public let path: String
-    public let errorDescription: String?
+    public let serverDescription: String?
 }
 
 /// Containts path, url and attributes of a Dropbox file or resource.
@@ -22,9 +22,9 @@ public final class DropboxFileObject: FileObject {
         self.init(json: json)
     }
     
-    internal init? (json: [String: AnyObject]) {
+    internal init? (json: [String: Any]) {
         var json = json
-        if json["name"] == nil, let metadata = json["metadata"] as? [String: AnyObject] {
+        if json["name"] == nil, let metadata = json["metadata"] as? [String: Any] {
             json = metadata
         }
         guard let name = json["name"] as? String else { return nil }
@@ -34,14 +34,14 @@ public final class DropboxFileObject: FileObject {
         self.serverTime =  (json["server_modified"] as? String).flatMap(Date.init(rfcString:))
         self.modifiedDate = (json["client_modified"] as? String).flatMap(Date.init(rfcString:))
         self.type = (json[".tag"] as? String) == "folder" ? .directory : .regular
-        self.isReadOnly = (json["sharing_info"]?["read_only"] as? NSNumber)?.boolValue ?? false
+        self.isReadOnly = ((json["sharing_info"] as? [String: Any])?["read_only"] as? NSNumber)?.boolValue ?? false
         self.id = json["id"] as? String
         self.rev = json["rev"] as? String
         self.contentHash = json["content_hash"] as? String
     }
     
     /// The time contents of file has been modified on server, returns nil if not set
-    open internal(set) var serverTime: Date? {
+    public internal(set) var serverTime: Date? {
         get {
             return allValues[.serverDateKey] as? Date
         }
@@ -52,7 +52,7 @@ public final class DropboxFileObject: FileObject {
     
     /// The document identifier is a value assigned by the Dropbox to a file.
     /// This value is used to identify the document regardless of where it is moved on a volume.
-    open internal(set) var id: String? {
+    public internal(set) var id: String? {
         get {
             return allValues[.fileResourceIdentifierKey] as? String
         }
@@ -73,7 +73,7 @@ public final class DropboxFileObject: FileObject {
     
     /// The revision of file, which changes when a file contents are modified.
     /// Changes to attributes or other file metadata do not change the identifier.
-    open internal(set) var rev: String? {
+    public internal(set) var rev: String? {
         get {
             return allValues[.generationIdentifierKey] as? String
         }
@@ -83,8 +83,8 @@ public final class DropboxFileObject: FileObject {
     }
 }
 
-internal extension DropboxFileProvider {
-    internal func correctPath(_ path: String?) -> String? {
+extension DropboxFileProvider {
+    func correctPath(_ path: String?) -> String? {
         guard let path = path else { return nil }
         if path.hasPrefix("id:") || path.hasPrefix("rev:") {
             return path
@@ -96,7 +96,7 @@ internal extension DropboxFileProvider {
         return p
     }
     
-    internal func listRequest(path: String, queryStr: String? = nil, recursive: Bool = false) -> ((_ token: String?) -> URLRequest?) {
+    func listRequest(path: String, queryStr: String? = nil, recursive: Bool = false) -> ((_ token: String?) -> URLRequest?) {
         if let queryStr = queryStr {
             return { [weak self] (token) -> URLRequest? in
                 guard let `self` = self else { return nil }
@@ -105,8 +105,8 @@ internal extension DropboxFileProvider {
                 request.httpMethod = "POST"
                 request.setValue(authentication: self.credential, with: .oAuth2)
                 request.setValue(contentType: .json)
-                var requestDictionary: [String: AnyObject] = ["path": self.correctPath(path) as NSString!]
-                requestDictionary["query"] = queryStr as NSString
+                var requestDictionary: [String: Any] = ["path": self.correctPath(path)!]
+                requestDictionary["query"] = queryStr
                 requestDictionary["start"] = NSNumber(value: (token.flatMap( { Int($0) } ) ?? 0))
                 request.httpBody = Data(jsonDictionary: requestDictionary)
                 return request
@@ -114,14 +114,14 @@ internal extension DropboxFileProvider {
         } else {
             return { [weak self] (token) -> URLRequest? in
                 guard let `self` = self else { return nil }
-                var requestDictionary = [String: AnyObject]()
+                var requestDictionary = [String: Any]()
                 let url: URL
                 if let token = token {
                     url = URL(string: "files/list_folder/continue", relativeTo: self.apiURL)!
-                    requestDictionary["cursor"] = token as NSString?
+                    requestDictionary["cursor"] = token
                 } else {
                     url = URL(string: "files/list_folder", relativeTo: self.apiURL)!
-                    requestDictionary["path"] = self.correctPath(path) as NSString?
+                    requestDictionary["path"] = self.correctPath(path)
                     requestDictionary["recursive"] = NSNumber(value: recursive)
                 }
                 var request = URLRequest(url: url)

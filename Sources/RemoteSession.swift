@@ -10,7 +10,7 @@ import Foundation
 
 /// A protocol defines properties for errors returned by HTTP/S based providers.
 /// Including Dropbox, OneDrive and WebDAV.
-public protocol FileProviderHTTPError: Error, CustomStringConvertible {
+public protocol FileProviderHTTPError: LocalizedError, CustomStringConvertible {
     /// HTTP status codes as an enum.
     typealias Code = FileProviderHTTPErrorCode
     /// HTTP status code returned for error by server.
@@ -18,12 +18,12 @@ public protocol FileProviderHTTPError: Error, CustomStringConvertible {
     /// Path of file/folder casued that error
     var path: String { get }
     /// Contents returned by server as error description
-    var errorDescription: String? { get }
+    var serverDescription: String? { get }
 }
 
 extension FileProviderHTTPError {
     public var description: String {
-        return code.description
+        return "Status \(code.rawValue): \(code.description)"
     }
     
     public var localizedDescription: String {
@@ -61,57 +61,93 @@ final public class SessionDelegate: NSObject, URLSessionDataDelegate, URLSession
         self.credential = fileProvider.credential
     }
     
-    open override func observeValue(forKeyPath keyPath: String?, of object: Any?, change: [NSKeyValueChangeKey : Any]?, context: UnsafeMutableRawPointer?) {
-        if let progress = context?.load(as: Progress.self), let newVal = change?[.newKey] as? Int64 {
-            switch keyPath ?? "" {
-            case #keyPath(URLSessionTask.countOfBytesReceived):
-                progress.completedUnitCount = newVal
-                if let startTime = progress.userInfo[ProgressUserInfoKey.startingTimeKey] as? Date, let task = object as? URLSessionTask {
-                    let elapsed = Date().timeIntervalSince(startTime)
-                    let throughput = Double(newVal) / elapsed
-                    progress.setUserInfoObject(NSNumber(value: throughput), forKey: .throughputKey)
-                    if task.countOfBytesExpectedToReceive > 0 {
-                        let remain = task.countOfBytesExpectedToReceive - task.countOfBytesReceived
-                        let estimatedTimeRemaining = Double(remain) / elapsed
-                        progress.setUserInfoObject(NSNumber(value: estimatedTimeRemaining), forKey: .estimatedTimeRemainingKey)
-                    }
+    public enum ObserveKind {
+        case upload
+        case download
+    }
+    
+    private let observeProgressesLock = NSLock()
+    private var observeProgresses = [(task: URLSessionTask, progress: Progress, kind: ObserveKind)]()
+    
+    public func observerProgress(of task: URLSessionTask, using: Progress, kind: ObserveKind) {
+        switch kind {
+        case .upload:
+            task.addObserver(self, forKeyPath: #keyPath(URLSessionTask.countOfBytesSent), options: .new, context: nil)
+        case .download:
+            task.addObserver(self, forKeyPath: #keyPath(URLSessionTask.countOfBytesReceived), options: .new, context: nil)
+            task.addObserver(self, forKeyPath: #keyPath(URLSessionTask.countOfBytesExpectedToReceive), options: .new, context: nil)
+        }
+        observeProgressesLock.lock()
+        observeProgresses.append((task, using, kind))
+        observeProgressesLock.unlock()
+    }
+    
+    func removeObservers(for task: URLSessionTask) {
+        observeProgressesLock.lock()
+        observeProgresses = observeProgresses.filter { (item) -> Bool in
+            if item.task == task {
+                switch item.kind {
+                case .upload:
+                    task.removeObserver(self, forKeyPath: #keyPath(URLSessionTask.countOfBytesSent))
+                case .download:
+                    task.removeObserver(self, forKeyPath: #keyPath(URLSessionTask.countOfBytesReceived))
+                    task.removeObserver(self, forKeyPath: #keyPath(URLSessionTask.countOfBytesExpectedToReceive))
                 }
-            case #keyPath(URLSessionTask.countOfBytesSent):
-                if let startTime = progress.userInfo[ProgressUserInfoKey.startingTimeKey] as? Date, let task = object as? URLSessionTask {
-                    let elapsed = Date().timeIntervalSince(startTime)
-                    let throughput = Double(newVal) / elapsed
-                    progress.setUserInfoObject(NSNumber(value: throughput), forKey: .throughputKey)
-                    
-                    // wokaround for multipart uploading
-                    let json = task.taskDescription?.deserializeJSON()
-                    let uploadedBytes = ((json?["uploadedBytes"] as? Int64) ?? 0) + newVal
-                    let totalBytes = (json?["totalBytes"] as? Int64) ?? task.countOfBytesExpectedToSend
-                    progress.completedUnitCount = uploadedBytes
-                    if totalBytes > 0 {
-                        let remain = totalBytes - uploadedBytes
-                        let estimatedTimeRemaining = Double(remain) / elapsed
-                        progress.setUserInfoObject(NSNumber(value: estimatedTimeRemaining), forKey: .estimatedTimeRemainingKey)
-                    }
-                } else {
-                    progress.completedUnitCount = newVal
-                }
-            case #keyPath(URLSessionTask.countOfBytesExpectedToReceive), #keyPath(URLSessionTask.countOfBytesExpectedToSend):
-                progress.totalUnitCount = newVal
-            default:
-                super.observeValue(forKeyPath: keyPath, of: object, change: change, context: context)
+                return false
+            } else {
+                return true
             }
+        }
+        observeProgressesLock.unlock()
+    }
+    
+    public override func observeValue(forKeyPath keyPath: String?, of object: Any?, change: [NSKeyValueChangeKey : Any]?, context: UnsafeMutableRawPointer?) {
+        guard let context = context, let keyPath = keyPath, keyPath.contains("countOfBytes") else { return }
+        let progress = context.assumingMemoryBound(to: Progress.self).pointee
+        guard let newVal = change?[.newKey] as? Int64 else { return }
+        
+        switch keyPath {
+        case #keyPath(URLSessionTask.countOfBytesReceived):
+            progress.completedUnitCount = newVal
+            if let startTime = progress.userInfo[ProgressUserInfoKey.startingTimeKey] as? Date, let task = object as? URLSessionTask {
+                let elapsed = Date().timeIntervalSince(startTime)
+                let throughput = Double(newVal) / elapsed
+                progress.setUserInfoObject(NSNumber(value: throughput), forKey: .throughputKey)
+                if task.countOfBytesExpectedToReceive > 0 {
+                    let remain = task.countOfBytesExpectedToReceive - task.countOfBytesReceived
+                    let estimatedTimeRemaining = Double(remain) / elapsed
+                    progress.setUserInfoObject(NSNumber(value: estimatedTimeRemaining), forKey: .estimatedTimeRemainingKey)
+                }
+            }
+        case #keyPath(URLSessionTask.countOfBytesSent):
+            if let startTime = progress.userInfo[ProgressUserInfoKey.startingTimeKey] as? Date, let task = object as? URLSessionTask {
+                let elapsed = Date().timeIntervalSince(startTime)
+                let throughput = Double(newVal) / elapsed
+                progress.setUserInfoObject(NSNumber(value: throughput), forKey: .throughputKey)
+                
+                // wokaround for multipart uploading
+                let json = task.taskDescription?.deserializeJSON()
+                let uploadedBytes = ((json?["uploadedBytes"] as? Int64) ?? 0) + newVal
+                let totalBytes = (json?["totalBytes"] as? Int64) ?? task.countOfBytesExpectedToSend
+                progress.completedUnitCount = uploadedBytes
+                if totalBytes > 0 {
+                    let remain = totalBytes - uploadedBytes
+                    let estimatedTimeRemaining = Double(remain) / elapsed
+                    progress.setUserInfoObject(NSNumber(value: estimatedTimeRemaining), forKey: .estimatedTimeRemainingKey)
+                }
+            } else {
+                progress.completedUnitCount = newVal
+            }
+        case #keyPath(URLSessionTask.countOfBytesExpectedToReceive), #keyPath(URLSessionTask.countOfBytesExpectedToSend):
+            progress.totalUnitCount = newVal
+        default:
+            super.observeValue(forKeyPath: keyPath, of: object, change: change, context: context)
         }
     }
     
     // codebeat:disable[ARITY]
     public func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
-        if task is URLSessionUploadTask {
-            task.removeObserver(self, forKeyPath: #keyPath(URLSessionTask.countOfBytesSent))
-            //task.removeObserver(self, forKeyPath: #keyPath(URLSessionTask.countOfBytesExpectedToSend))
-        } else if task is URLSessionDownloadTask {
-            task.removeObserver(self, forKeyPath: #keyPath(URLSessionTask.countOfBytesReceived))
-            task.removeObserver(self, forKeyPath: #keyPath(URLSessionTask.countOfBytesExpectedToReceive))
-        }
+        self.removeObservers(for: task)
         
         _ = dataCompletionHandlersForTasks[session.sessionDescription!]?.removeValue(forKey: task.taskIdentifier)
         if !(error == nil && task is URLSessionDownloadTask) {
@@ -119,32 +155,6 @@ final public class SessionDelegate: NSObject, URLSessionDataDelegate, URLSession
             completionHandler?(error)
             _ = completionHandlersForTasks[session.sessionDescription!]?.removeValue(forKey: task.taskIdentifier)
         }
-        
-        guard let json = task.taskDescription?.deserializeJSON(),
-            let op = FileOperationType(json: json), let fileProvider = fileProvider else {
-                return
-        }
-        
-        switch op {
-        case .fetch:
-            if task is URLSessionDataTask {
-                task.removeObserver(self, forKeyPath: #keyPath(URLSessionTask.countOfBytesReceived))
-                task.removeObserver(self, forKeyPath: #keyPath(URLSessionTask.countOfBytesExpectedToReceive))
-            }
-        default:
-            break
-        }
-        
-        if !(task is URLSessionDownloadTask), case FileOperationType.fetch = op {
-            return
-        }
-        if #available(iOS 9.0, macOS 10.11, *) {
-            if task is URLSessionStreamTask {
-                return
-            }
-        }
-        
-        fileProvider.delegateNotify(op, error: error)
     }
     
     public func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {
@@ -216,7 +226,7 @@ final public class SessionDelegate: NSObject, URLSessionDataDelegate, URLSession
         authenticate(didReceive: challenge, completionHandler: completionHandler)
     }
     
-    func authenticate(didReceive challenge: URLAuthenticationChallenge, completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void) {
+    private func authenticate(didReceive challenge: URLAuthenticationChallenge, completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void) {
         switch (challenge.previousFailureCount, credential != nil) {
         case (0...1, true):
             completionHandler(.useCredential, credential)

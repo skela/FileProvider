@@ -8,7 +8,7 @@
 
 import Foundation
 
-public extension Array where Element: FileObject {
+extension Array where Element: FileObject {
     /// Returns a sorted array of `FileObject`s by criterias set in attributes.
     public func sort(by type: FileObjectSorting.SortType, ascending: Bool = true, isDirectoriesFirst: Bool = false) -> [Element] {
         let sorting = FileObjectSorting(type: type, ascending: ascending, isDirectoriesFirst: isDirectoriesFirst)
@@ -28,7 +28,7 @@ public extension Sequence where Iterator.Element == UInt8 {
     }
 }
 
-public extension URLFileResourceType {
+extension URLFileResourceType {
     /// **FileProvider** returns corresponding `URLFileResourceType` of a `FileAttributeType` value
     public init(fileTypeValue: FileAttributeType) {
         switch fileTypeValue {
@@ -44,7 +44,33 @@ public extension URLFileResourceType {
     }
 }
 
-public extension URLResourceKey {
+extension CocoaError {
+    init(_ code: CocoaError.Code, path: String?) {
+        if let path = path {
+            let userInfo: [String: Any] = [NSFilePathErrorKey: path]
+            self.init(code, userInfo: userInfo)
+        } else {
+            self.init(code)
+        }
+        
+    }
+}
+
+extension URLError {
+    init(_ code: URLError.Code, url: URL?) {
+        if let url = url {
+            let userInfo: [String: Any] = [NSURLErrorKey: url,
+                                           NSURLErrorFailingURLErrorKey: url,
+                                           NSURLErrorFailingURLStringErrorKey: url.absoluteString,
+                                           ]
+            self.init(code, userInfo: userInfo)
+        } else {
+            self.init(code)
+        }
+    }
+}
+
+extension URLResourceKey {
     /// **FileProvider** returns url of file object.
     public static let fileURLKey = URLResourceKey(rawValue: "NSURLFileURLKey")
     /// **FileProvider** returns modification date of file in server
@@ -59,7 +85,7 @@ public extension URLResourceKey {
     public static let childrensCount = URLResourceKey(rawValue: "MFPURLChildrensCount")
 }
 
-public extension ProgressUserInfoKey {
+extension ProgressUserInfoKey {
     /// **FileProvider** returns associated `FileProviderOperationType`
     public static let fileProvderOperationTypeKey = ProgressUserInfoKey("MFPOperationTypeKey")
     /// **FileProvider** returns start date/time of operation
@@ -76,15 +102,22 @@ internal extension URL {
     }
     
     var fileSize: Int64 {
-        return Int64((try? self.resourceValues(forKeys: [.fileSizeKey]))?.fileSize ?? -1)
+        return (try? self.resourceValues(forKeys: [.fileSizeKey]))?.allValues[.fileSizeKey] as? Int64 ?? -1
     }
     
     var fileExists: Bool {
         return (try? self.checkResourceIsReachable()) ?? false
     }
+    
+    #if os(macOS) || os(iOS) || os(tvOS)
+    #else
+    func checkPromisedItemIsReachable() throws -> Bool {
+        return false
+    }
+    #endif
 }
 
-public extension URLRequest {
+extension URLRequest {
     /// Defines HTTP Authentication method required to access
     public enum AuthenticationType {
         /// Basic method for authentication
@@ -253,7 +286,7 @@ internal extension URLRequest {
         let cfEncoding = CFStringConvertNSStringEncodingToEncoding(acceptCharset.rawValue)
         if let charsetString = CFStringConvertEncodingToIANACharSetName(cfEncoding) as String? {
             if let qualityDesc = quality.flatMap({ String(format: "%.1f", min(0, max ($0, 1))) }) {
-                self.setValue("\(charsetString); q=\(qualityDesc)", forHTTPHeaderField: "Accept-Charset")
+                self.setValue("\(charsetString);q=\(qualityDesc)", forHTTPHeaderField: "Accept-Charset")
             } else {
                 self.setValue(charsetString, forHTTPHeaderField: "Accept-Charset")
             }
@@ -263,7 +296,7 @@ internal extension URLRequest {
         let cfEncoding = CFStringConvertNSStringEncodingToEncoding(acceptCharset.rawValue)
         if let charsetString = CFStringConvertEncodingToIANACharSetName(cfEncoding) as String? {
             if let qualityDesc = quality.flatMap({ String(format: "%.1f", min(0, max ($0, 1))) }) {
-                self.addValue("\(charsetString); q=\(qualityDesc)", forHTTPHeaderField: "Accept-Charset")
+                self.addValue("\(charsetString);q=\(qualityDesc)", forHTTPHeaderField: "Accept-Charset")
             } else {
                 self.addValue(charsetString, forHTTPHeaderField: "Accept-Charset")
             }
@@ -279,7 +312,7 @@ internal extension URLRequest {
     
     mutating func setValue(acceptEncoding: Encoding, quality: Double? = nil) {
         if let qualityDesc = quality.flatMap({ String(format: "%.1f", min(0, max ($0, 1))) }) {
-            self.setValue("\(acceptEncoding.rawValue); q=\(qualityDesc)", forHTTPHeaderField: "Accept-Encoding")
+            self.setValue("\(acceptEncoding.rawValue);q=\(qualityDesc)", forHTTPHeaderField: "Accept-Encoding")
         } else {
             self.setValue(acceptEncoding.rawValue, forHTTPHeaderField: "Accept-Encoding")
         }
@@ -287,7 +320,7 @@ internal extension URLRequest {
     
     mutating func addValue(acceptEncoding: Encoding, quality: Double? = nil) {
         if let qualityDesc = quality.flatMap({ String(format: "%.1f", min(0, max ($0, 1))) }) {
-            self.addValue("\(acceptEncoding.rawValue); q=\(qualityDesc)", forHTTPHeaderField: "Accept-Encoding")
+            self.addValue("\(acceptEncoding.rawValue);q=\(qualityDesc)", forHTTPHeaderField: "Accept-Encoding")
         } else {
             self.addValue(acceptEncoding.rawValue, forHTTPHeaderField: "Accept-Encoding")
         }
@@ -296,7 +329,7 @@ internal extension URLRequest {
     mutating func setValue(acceptLanguage: Locale, quality: Double? = nil) {
         let langCode = acceptLanguage.identifier.replacingOccurrences(of: "_", with: "-")
         if let qualityDesc = quality.flatMap({ String(format: "%.1f", min(0, max ($0, 1))) }) {
-            self.setValue("\(langCode); q=\(qualityDesc)", forHTTPHeaderField: "Accept-Language")
+            self.setValue("\(langCode);q=\(qualityDesc)", forHTTPHeaderField: "Accept-Language")
         } else {
             self.setValue(langCode, forHTTPHeaderField: "Accept-Language")
         }
@@ -305,7 +338,7 @@ internal extension URLRequest {
     mutating func addValue(acceptLanguage: Locale, quality: Double? = nil) {
         let langCode = acceptLanguage.identifier.replacingOccurrences(of: "_", with: "-")
         if let qualityDesc = quality.flatMap({ String(format: "%.1f", min(0, max ($0, 1))) }) {
-            self.addValue("\(langCode); q=\(qualityDesc)", forHTTPHeaderField: "Accept-Language")
+            self.addValue("\(langCode);q=\(qualityDesc)", forHTTPHeaderField: "Accept-Language")
         } else {
             self.addValue(langCode, forHTTPHeaderField: "Accept-Language")
         }
@@ -351,7 +384,7 @@ internal extension URLRequest {
         self.setValue(contentType.rawValue + parameter, forHTTPHeaderField: "Content-Type")
     }
     
-    mutating func setValue(dropboxArgKey requestDictionary: [String: AnyObject]) {
+    mutating func setValue(dropboxArgKey requestDictionary: [String: Any]) {
         guard let jsonData = try? JSONSerialization.data(withJSONObject: requestDictionary, options: []) else {
             return
         }
@@ -366,21 +399,21 @@ internal extension CharacterSet {
     static let filePathAllowed = CharacterSet.urlPathAllowed.subtracting(CharacterSet(charactersIn: ":"))
 }
 
-internal extension Data {
-    internal var isPDF: Bool {
+extension Data {
+    var isPDF: Bool {
         return self.count > 4 && self.scanString(length: 4, using: .ascii) == "%PDF"
     }
     
-    init? (jsonDictionary dictionary: [String: AnyObject]) {
+    init? (jsonDictionary dictionary: [String: Any]) {
+        guard JSONSerialization.isValidJSONObject(dictionary) else { return nil }
         guard let data = try? JSONSerialization.data(withJSONObject: dictionary, options: []) else {
             return nil
         }
         self = data
     }
     
-    func deserializeJSON() -> [String: AnyObject]? {
-        guard JSONSerialization.isValidJSONObject(self) else { return nil }
-        return (try? JSONSerialization.jsonObject(with: self, options: [])) as? [String: AnyObject]
+    func deserializeJSON() -> [String: Any]? {
+        return (try? JSONSerialization.jsonObject(with: self, options: [])) as? [String: Any]
     }
     
     init<T>(value: T) {
@@ -390,36 +423,39 @@ internal extension Data {
     
     func scanValue<T>() -> T? {
         guard MemoryLayout<T>.size <= self.count else { return nil }
+        #if swift(>=5.0)
+        return self.withUnsafeBytes { $0.load(as: T.self) }
+        #else
         return self.withUnsafeBytes { $0.pointee }
+        #endif
     }
     
     func scanValue<T>(start: Int) -> T? {
         let length = MemoryLayout<T>.size
         guard self.count >= start + length else { return nil }
-        return self.subdata(in: start..<start+length).withUnsafeBytes { $0.pointee }
+        let subdata = self.subdata(in: start..<start+length)
+        #if swift(>=5.0)
+        return subdata.withUnsafeBytes { $0.load(as: T.self) }
+        #else
+        return subdata.withUnsafeBytes { $0.pointee }
+        #endif
     }
     
     func scanString(start: Int = 0, length: Int, using encoding: String.Encoding = .utf8) -> String? {
         guard self.count >= start + length else { return nil }
         return String(data: self.subdata(in: start..<start+length), encoding: encoding)
     }
-    
-    static func mapMemory<T, U>(from: T) -> U? {
-        guard MemoryLayout<T>.size >= MemoryLayout<U>.size else { return nil }
-        let data = Data(value: from)
-        return data.scanValue()
-    }
 }
 
 internal extension String {
-    init? (jsonDictionary: [String: AnyObject]) {
+    init? (jsonDictionary: [String: Any]) {
         guard let data = Data(jsonDictionary: jsonDictionary) else {
             return nil
         }
         self.init(data: data, encoding: .utf8)
     }
     
-    func deserializeJSON(using encoding: String.Encoding = .utf8) -> [String: AnyObject]? {
+    func deserializeJSON(using encoding: String.Encoding = .utf8) -> [String: Any]? {
         guard let data = self.data(using: encoding) else {
             return nil
         }
@@ -440,17 +476,35 @@ internal extension String {
     }
 }
 
-#if swift(>=4.0)
-#else
-extension String {
-    var count: Int {
-        return self.characters.count
+extension NSNumber {
+    internal func format(precision: Int = 2, style: NumberFormatter.Style = .decimal) -> String {
+        let formatter = NumberFormatter()
+        formatter.maximumFractionDigits = precision
+        formatter.numberStyle = style
+        return formatter.string(from: self)!
     }
 }
-#endif
 
-internal extension TimeInterval {
-    internal var formatshort: String {
+extension String {
+    internal var pathExtension: String {
+        return (self as NSString).pathExtension
+    }
+    
+    internal func appendingPathComponent(_ pathComponent: String) -> String {
+        return (self as NSString).appendingPathComponent(pathComponent)
+    }
+    
+    internal var lastPathComponent: String {
+        return (self as NSString).lastPathComponent
+    }
+    
+    internal var deletingLastPathComponent: String {
+        return (self as NSString).deletingLastPathComponent
+    }
+}
+
+extension TimeInterval {
+    var formatshort: String {
         var result = "0:00"
         if self < TimeInterval(Int32.max) {
             result = ""
@@ -475,35 +529,53 @@ internal extension TimeInterval {
     }
 }
 
-public extension Date {
+extension Date {
     /// Date formats used commonly in internet messaging defined by various RFCs.
     public enum RFCStandards: String {
-        /// Date format defined by usenet, commonly used in old implementations.
+        /// Obsolete (2-digit year) date format defined by RFC 822 for http.
+        case rfc822 = "EEE',' dd' 'MMM' 'yy HH':'mm':'ss z"
+        /// Obsolete (2-digit year) date format defined by RFC 850 for usenet.
         case rfc850 = "EEEE',' dd'-'MMM'-'yy HH':'mm':'ss z"
-        /// Date format defined by RFC 1132 for http.
+        /// Date format defined by RFC 1123 for http.
         case rfc1123 = "EEE',' dd' 'MMM' 'yyyy HH':'mm':'ss z"
-        /// Date format defined by ISO 8601, also defined in RFC 3339. Used by Dropbox.
-        case iso8601 = "yyyy'-'MM'-'dd'T'HH':'mm':'ssZ"
+        /// Date format defined by RFC 3339, as a profile of ISO 8601.
+        case rfc3339 = "yyyy'-'MM'-'dd'T'HH':'mm':'ssZZZZZ"
+        /// Date format defined RFC 3339 as rare case with milliseconds.
+        case rfc3339Extended = "yyyy'-'MM'-'dd'T'HH':'mm':'ss'.'SSSZZZZZ"
         /// Date string returned by asctime() function.
         case asctime = "EEE MMM d HH':'mm':'ss yyyy"
         
+        //  Defining a http alias allows changing default time format if a new RFC becomes standard.
         /// Equivalent to and defined by RFC 1123.
         public static let http = RFCStandards.rfc1123
-        /// Equivalent to and defined by ISO 8610.
-        public static let rfc3339 = RFCStandards.iso8601
         /// Equivalent to and defined by RFC 850.
         public static let usenet = RFCStandards.rfc850
         
-        // Sorted by commonness
-        fileprivate static let allValues: [RFCStandards] = [.rfc1123, .rfc850, .iso8601, .asctime]
+        /* re. [RFC7231 section-7.1.1.1](https://tools.ietf.org/html/rfc7231#section-7.1.1.1)
+         "HTTP servers and client MUST accept all three HTTP-date formats" which are IMF-fixdate,
+         obsolete RFC 850 format and ANSI C's asctime() format.
+         
+         ISO 8601 format is common in JSON and XML fields, defined by RFC 3339 as a timestamp format.
+         Though not mandated, we check string against them to allow using Date(rfcString:) in
+         wider and more general sitations.
+         
+         We use RFC 822 instead of RFC 1123 to convert from string because NSDateFormatter can parse
+         both 2-digit and 4-digit year correctly when `dateFormat` year is 2-digit.
+         
+         These values are sorted by frequency.
+         */
+        fileprivate static let parsingCases: [RFCStandards] = [.rfc822, .rfc850, .asctime, .rfc3339, .rfc3339Extended]
     }
+    
+    private static let posixLocale = Locale(identifier: "en_US_POSIX")
+    private static let utcTimezone = TimeZone(identifier: "UTC")
     
     /// Checks date string against various RFC standards and returns `Date`.
     public init?(rfcString: String) {
         let dateFor: DateFormatter = DateFormatter()
-        dateFor.locale = Locale(identifier: "en_US")
+        dateFor.locale = Date.posixLocale
         
-        for standard in RFCStandards.allValues {
+        for standard in RFCStandards.parsingCases {
             dateFor.dateFormat = standard.rawValue
             if let date = dateFor.date(from: rfcString) {
                 self = date
@@ -515,14 +587,60 @@ public extension Date {
     }
     
     /// Formats date according to RFCs standard.
-    public func format(with standard: RFCStandards, locale: Locale? = nil, timeZone: TimeZone? = nil) -> String {
+    /// - Note: local and timezone paramters should be nil for `.http` standard
+    internal func format(with standard: RFCStandards, locale: Locale? = nil, timeZone: TimeZone? = nil) -> String {
         let fm = DateFormatter()
         fm.dateFormat = standard.rawValue
-        fm.timeZone = timeZone ?? TimeZone(identifier: "UTC")
-        fm.locale = locale ?? Locale(identifier: "en_US_POSIX")
+        fm.timeZone = timeZone ?? Date.utcTimezone
+        fm.locale = locale ?? Date.posixLocale
         return fm.string(from: self)
     }
 }
+
+extension InputStream {
+    func readData(ofLength length: Int) throws -> Data {
+        var data = Data(count: length)
+        #if swift(>=5.0)
+        let result = data.withUnsafeMutableBytes { (buf) -> Int in
+            let p = buf.bindMemory(to: UInt8.self).baseAddress!
+            return self.read(p, maxLength: buf.count)
+        }
+        #else
+        let bufcount = data.count
+        let result = data.withUnsafeMutableBytes { (p) -> Int in
+            return self.read(p, maxLength: bufcount)
+        }
+        #endif
+        if result < 0 {
+            throw self.streamError ?? POSIXError(.EIO)
+        } else {
+            data.count = result
+            return data
+        }
+    }
+}
+
+extension OutputStream {
+    func write(data: Data) throws -> Int {
+        #if swift(>=5.0)
+        let result = data.withUnsafeBytes { (buf) -> Int in
+            let p = buf.bindMemory(to: UInt8.self).baseAddress!
+            return self.write(p, maxLength: buf.count)
+        }
+        #else
+        let bufcount = data.count
+        let result = data.withUnsafeBytes { (p) -> Int in
+            return self.write(p, maxLength: bufcount)
+        }
+        #endif
+        if result < 0 {
+            throw self.streamError ?? POSIXError(.EIO)
+        } else {
+            return result
+        }
+    }
+}
+
 
 internal extension NSPredicate {
     func findValue(forKey key: String?, operator op: NSComparisonPredicate.Operator? = nil) -> Any? {
@@ -566,3 +684,31 @@ func hasSuffix(_ suffix: String) -> (_ value: String) -> Bool {
         value.hasSuffix(suffix)
     }
 }
+
+// Legacy Swift versions support
+
+#if swift(>=4.0)
+#else
+extension String {
+    var count: Int {
+        return self.characters.count
+    }
+}
+#endif
+
+#if swift(>=4.1)
+#else
+extension Array {
+    func compactMap<ElementOfResult>(_ transform: (Element) throws -> ElementOfResult?) rethrows -> [ElementOfResult] {
+        return try self.flatMap(transform)
+    }
+}
+
+extension ArraySlice {
+    func compactMap<ElementOfResult>(_ transform: (Element) throws -> ElementOfResult?) rethrows -> [ElementOfResult] {
+        return try self.flatMap(transform)
+    }
+}
+#endif
+
+

@@ -8,7 +8,9 @@
 //
 
 import Foundation
+#if os(macOS) || os(iOS) || os(tvOS)
 import CoreGraphics
+#endif
 
 /**
  Allows accessing to Dropbox stored files. This provider doesn't cache or save files internally, however you can
@@ -22,9 +24,9 @@ open class DropboxFileProvider: HTTPFileProvider, FileProviderSharing {
     override open class var type: String { return "Dropbox" }
     
     /// Dropbox RPC API URL, which is equal with [https://api.dropboxapi.com/2/](https://api.dropboxapi.com/2/)
-    open let apiURL: URL
+    public let apiURL: URL
     /// Dropbox contents download/upload API URL, which is equal with [https://content.dropboxapi.com/2/](https://content.dropboxapi.com/2/)
-    open let contentURL: URL
+    public let contentURL: URL
     
     /**
      Initializer for Dropbox provider with given client ID and Token.
@@ -42,7 +44,7 @@ open class DropboxFileProvider: HTTPFileProvider, FileProviderSharing {
     }
     
     public required convenience init?(coder aDecoder: NSCoder) {
-        self.init(credential: aDecoder.decodeObject(forKey: "credential") as? URLCredential)
+        self.init(credential: aDecoder.decodeObject(of: URLCredential.self, forKey: "credential"))
         self.useCache        = aDecoder.decodeBool(forKey: "useCache")
         self.validatingCache = aDecoder.decodeBool(forKey: "validatingCache")
     }
@@ -89,7 +91,7 @@ open class DropboxFileProvider: HTTPFileProvider, FileProviderSharing {
         request.httpMethod = "POST"
         request.setValue(authentication: credential, with: .oAuth2)
         request.setValue(contentType: .json)
-        let requestDictionary: [String: AnyObject] = ["path": correctPath(path)! as NSString]
+        let requestDictionary: [String: Any] = ["path": correctPath(path)!]
         request.httpBody = Data(jsonDictionary: requestDictionary)
         let task = session.dataTask(with: request, completionHandler: { (data, response, error) in
             var serverError: FileProviderHTTPError?
@@ -151,6 +153,7 @@ open class DropboxFileProvider: HTTPFileProvider, FileProviderSharing {
        - error: `Error` returned by server if occured.
      - Returns: An `Progress` to get progress or cancel progress. Use `completedUnitCount` to iterate count of found items.
      */
+    @discardableResult
     open override func searchFiles(path: String, recursive: Bool, query: NSPredicate, foundItemHandler: ((FileObject) -> Void)?, completionHandler: @escaping (_ files: [FileObject], _ error: Error?) -> Void) -> Progress? {
         let queryStr: String?
         if query.predicateFormat == "TRUEPREDICATE" {
@@ -162,14 +165,14 @@ open class DropboxFileProvider: HTTPFileProvider, FileProviderSharing {
         let queryIsTruePredicate = query.predicateFormat == "TRUEPREDICATE"
         return paginated(path, requestHandler: requestHandler,
             pageHandler: { [weak self] (data, progress) -> (files: [FileObject], error: Error?, newToken: String?) in
-            guard let json = data?.deserializeJSON(), let entries = (json["entries"] ?? json["matches"]) as? [AnyObject] else {
-                let err = self?.urlError(path, code: .badServerResponse)
+            guard let json = data?.deserializeJSON(), let entries = (json["entries"] ?? json["matches"]) as? [Any] else {
+                let err = URLError(.badServerResponse, url: self?.url(of: path))
                 return ([], err, nil)
             }
             
             var files = [FileObject]()
             for entry in entries {
-                if let entry = entry as? [String: AnyObject], let file = DropboxFileObject(json: entry), queryIsTruePredicate || query.evaluate(with: file.mapPredicate()) {
+                if let entry = entry as? [String: Any], let file = DropboxFileObject(json: entry), queryIsTruePredicate || query.evaluate(with: file.mapPredicate()) {
                     files.append(file)
                     progress.completedUnitCount += 1
                     foundItemHandler?(file)
@@ -190,11 +193,11 @@ open class DropboxFileProvider: HTTPFileProvider, FileProviderSharing {
     override func request(for operation: FileOperationType, overwrite: Bool = false, attributes: [URLResourceKey : Any] = [:]) -> URLRequest {
         
         func uploadRequest(to path: String) -> URLRequest {
-            var requestDictionary = [String: AnyObject]()
+            var requestDictionary = [String: Any]()
             let url: URL = URL(string: "files/upload", relativeTo: contentURL)!
-            requestDictionary["path"] = correctPath(path) as NSString?
-            requestDictionary["mode"] = (overwrite ? "overwrite" : "add") as NSString
-            //requestDictionary["client_modified"] = (attributes[.contentModificationDateKey] as? Date)?.format(with: .rfc3339) as NSString?
+            requestDictionary["path"] = correctPath(path)
+            requestDictionary["mode"] = (overwrite ? "overwrite" : "add")
+            //requestDictionary["client_modified"] = (attributes[.contentModificationDateKey] as? Date)?.format(with: .rfc3339)
             var request = URLRequest(url: url)
             request.httpMethod = "POST"
             request.setValue(authentication: credential, with: .oAuth2)
@@ -208,7 +211,7 @@ open class DropboxFileProvider: HTTPFileProvider, FileProviderSharing {
             var request = URLRequest(url: url)
             request = URLRequest(url: url)
             request.setValue(authentication: credential, with: .oAuth2)
-            request.setValue(dropboxArgKey: ["path": correctPath(path)! as NSString])
+            request.setValue(dropboxArgKey: ["path": correctPath(path)!])
             return request
         }
         
@@ -231,7 +234,7 @@ open class DropboxFileProvider: HTTPFileProvider, FileProviderSharing {
         let url: String
         let sourcePath = operation.source
         let destPath = operation.destination
-        var requestDictionary = [String: AnyObject]()
+        var requestDictionary = [String: Any]()
         switch operation {
         case .create:
             url = "files/create_folder_v2"
@@ -251,11 +254,11 @@ open class DropboxFileProvider: HTTPFileProvider, FileProviderSharing {
         request.httpMethod = "POST"
         request.setValue(authentication: credential, with: .oAuth2)
         request.setValue(contentType: .json)
-        if let dest = correctPath(destPath) as NSString? {
-            requestDictionary["from_path"] = correctPath(sourcePath) as NSString?
+        if let dest = correctPath(destPath) {
+            requestDictionary["from_path"] = correctPath(sourcePath)
             requestDictionary["to_path"] = dest
         } else {
-            requestDictionary["path"] = correctPath(sourcePath) as NSString?
+            requestDictionary["path"] = correctPath(sourcePath)
         }
         request.httpBody = Data(jsonDictionary: requestDictionary)
         return request
@@ -264,11 +267,11 @@ open class DropboxFileProvider: HTTPFileProvider, FileProviderSharing {
     override func serverError(with code: FileProviderHTTPErrorCode, path: String?, data: Data?) -> FileProviderHTTPError {
         let errorDesc: String?
         if let response = data?.deserializeJSON() {
-            errorDesc = (response["user_message"] as? String) ?? (response["error"]?["tag"] as? String)
+            errorDesc = (response["user_message"] as? String) ?? ((response["error"] as? [String: Any])?["tag"] as? String)
         } else {
             errorDesc = data.flatMap({ String(data: $0, encoding: .utf8) })
         }
-        return FileProviderDropboxError(code: code, path: path ?? "", errorDescription: errorDesc)
+        return FileProviderDropboxError(code: code, path: path ?? "", serverDescription: errorDesc)
     }
     
     override var maxUploadSimpleSupported: Int64 {
@@ -290,14 +293,14 @@ open class DropboxFileProvider: HTTPFileProvider, FileProviderSharing {
     }
     */
     // TODO: Implement /get_account & /get_current_account
-    
+
     open func publicLink(to path: String, completionHandler: @escaping ((_ link: URL?, _ attribute: FileObject?, _ expiration: Date?, _ error: Error?) -> Void)) {
         let url = URL(string: "files/get_temporary_link", relativeTo: apiURL)!
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue(authentication: credential, with: .oAuth2)
         request.setValue(contentType: .json)
-        let requestDictionary: [String: AnyObject] = ["path": correctPath(path)! as NSString]
+        let requestDictionary: [String: Any] = ["path": correctPath(path)!]
         request.httpBody = Data(jsonDictionary: requestDictionary)
         let task = session.dataTask(with: request, completionHandler: { (data, response, error) in
             var serverError: FileProviderHTTPError?
@@ -308,7 +311,7 @@ open class DropboxFileProvider: HTTPFileProvider, FileProviderSharing {
                 serverError = code.flatMap { self.serverError(with: $0, path: path, data: data) }
                 if let json = data?.deserializeJSON() {
                     link = (json["link"] as? String).flatMap(URL.init(string:))
-                    fileObject = (json["metadata"] as? [String: AnyObject]).flatMap(DropboxFileObject.init(json:))
+                    fileObject = (json["metadata"] as? [String: Any]).flatMap(DropboxFileObject.init(json:))
                 }
             }
             
@@ -331,7 +334,7 @@ open class DropboxFileProvider: HTTPFileProvider, FileProviderSharing {
      */
     open func copyItem(remoteURL: URL, to toPath: String, completionHandler: @escaping ((_ jobId: String?, _ attribute: DropboxFileObject?, _ error: Error?) -> Void)) {
         if remoteURL.isFileURL {
-            completionHandler(nil, nil, self.urlError(remoteURL.path, code: .badURL))
+            completionHandler(nil, nil, URLError(.badURL, url: remoteURL))
             return
         }
         let url = URL(string: "files/save_url", relativeTo: apiURL)!
@@ -339,7 +342,7 @@ open class DropboxFileProvider: HTTPFileProvider, FileProviderSharing {
         request.httpMethod = "POST"
         request.setValue(authentication: credential, with: .oAuth2)
         request.setValue(contentType: .json)
-        let requestDictionary: [String: AnyObject] = ["path": correctPath(toPath)! as NSString, "url" : remoteURL.absoluteString as NSString]
+        let requestDictionary: [String: Any] = ["path": correctPath(toPath)!, "url" : remoteURL.absoluteString]
         request.httpBody = Data(jsonDictionary: requestDictionary)
         let task = session.dataTask(with: request, completionHandler: { (data, response, error) in
             var serverError: FileProviderHTTPError?
@@ -350,7 +353,7 @@ open class DropboxFileProvider: HTTPFileProvider, FileProviderSharing {
                 serverError = code.flatMap { self.serverError(with: $0, path: toPath, data: data) }
                 if let json = data?.deserializeJSON() {
                     jobId = json["async_job_id"] as? String
-                    fileObject = (json["metadata"] as? [String: AnyObject]).flatMap(DropboxFileObject.init(json:))
+                    fileObject = (json["metadata"] as? [String: Any]).flatMap(DropboxFileObject.init(json:))
                 }
             }
             completionHandler(jobId, fileObject, serverError ?? error)
@@ -372,7 +375,7 @@ open class DropboxFileProvider: HTTPFileProvider, FileProviderSharing {
         request.httpMethod = "POST"
         request.setValue(authentication: credential, with: .oAuth2)
         request.setValue(contentType: .json)
-        let requestDictionary: [String: AnyObject] = ["path": correctPath(toPath)! as NSString, "copy_reference" : reference as NSString]
+        let requestDictionary: [String: Any] = ["path": correctPath(toPath)!, "copy_reference" : reference ]
         request.httpBody = Data(jsonDictionary: requestDictionary)
         let task = session.dataTask(with: request, completionHandler: { (data, response, error) in
             var serverError: FileProviderHTTPError?
@@ -387,23 +390,8 @@ open class DropboxFileProvider: HTTPFileProvider, FileProviderSharing {
 }
 
 extension DropboxFileProvider: ExtendedFileProvider {
-    open func thumbnailOfFileSupported(path: String) -> Bool {
-        switch (path as NSString).pathExtension.lowercased() {
-        case "jpg", "jpeg", "gif", "bmp", "png", "tif", "tiff":
-            return true
-        case "doc", "docx", "docm", "xls", "xlsx", "xlsm":
-            return true
-        case  "ppt", "pps", "ppsx", "ppsm", "pptx", "pptm":
-            return true
-        case "rtf":
-            return true
-        default:
-            return false
-        }
-    }
-    
     open func propertiesOfFileSupported(path: String) -> Bool {
-        let fileExt = (path as NSString).pathExtension.lowercased()
+        let fileExt = path.pathExtension.lowercased()
         switch fileExt {
         case "jpg", "jpeg", "bmp", "gif", "png", "tif", "tiff":
             return true
@@ -415,69 +403,15 @@ extension DropboxFileProvider: ExtendedFileProvider {
             return false
         }
     }
-        
-    /// Default value for dimension is 64x64, according to Dropbox documentation
-    open func thumbnailOfFile(path: String, dimension: CGSize?, completionHandler: @escaping ((_ image: ImageClass?, _ error: Error?) -> Void)) {
-        let url: URL
-        let thumbAPI: Bool
-        switch (path as NSString).pathExtension.lowercased() {
-        case "jpg", "jpeg", "gif", "bmp", "png", "tif", "tiff":
-            url = URL(string: "files/get_thumbnail", relativeTo: contentURL)!
-            thumbAPI = true
-        case "doc", "docx", "docm", "xls", "xlsx", "xlsm":
-            fallthrough
-        case  "ppt", "pps", "ppsx", "ppsm", "pptx", "pptm":
-            fallthrough
-        case "rtf":
-            url = URL(string: "files/get_preview", relativeTo: contentURL)!
-            thumbAPI = false
-        default:
-            return
-        }
-        var request = URLRequest(url: url)
-        request.setValue(authentication: credential, with: .oAuth2)
-        var requestDictionary: [String: AnyObject] = ["path": path as NSString]
-        if thumbAPI {
-            requestDictionary["format"] = "jpeg" as NSString
-            let size: String
-            switch dimension?.height ?? 64 {
-            case 0...32:    size = "w32h32"
-            case 33...64:   size = "w64h64"
-            case 65...128:  size = "w128h128"
-            case 129...480: size = "w640h480"
-            default: size = "w1024h768"
-            }
-            requestDictionary["size"] = size as NSString
-        }
-        request.setValue(dropboxArgKey: requestDictionary)
-        let task = self.session.dataTask(with: request, completionHandler: { (data, response, error) in
-            var image: ImageClass? = nil
-            if let r = response as? HTTPURLResponse, let result = r.allHeaderFields["Dropbox-API-Result"] as? String, let jsonResult = result.deserializeJSON() {
-                if jsonResult["error"] != nil {
-                    completionHandler(nil, self.urlError(path, code: .cannotDecodeRawData))
-                }
-            }
-            if let data = data {
-                if data.isPDF, let pageImage = DropboxFileProvider.convertToImage(pdfData: data) {
-                    image = pageImage
-                } else if let contentType = (response as? HTTPURLResponse)?.allHeaderFields["Content-Type"] as? String, contentType.contains("text/html") {
-                     // TODO: Implement converting html returned type of get_preview to image
-                } else if let fetchedimage = ImageClass(data: data) {
-                    image = dimension.map({ DropboxFileProvider.scaleDown(image: fetchedimage, toSize: $0) }) ?? fetchedimage
-                }
-            }
-            completionHandler(image, error)
-        })
-        task.resume()
-    }
     
-    open func propertiesOfFile(path: String, completionHandler: @escaping ((_ propertiesDictionary: [String : Any], _ keys: [String], _ error: Error?) -> Void)) {
+    @discardableResult
+    open func propertiesOfFile(path: String, completionHandler: @escaping ((_ propertiesDictionary: [String : Any], _ keys: [String], _ error: Error?) -> Void)) -> Progress? {
         let url = URL(string: "files/get_metadata", relativeTo: apiURL)!
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue(authentication: credential, with: .oAuth2)
         request.setValue(contentType: .json)
-        let requestDictionary: [String: AnyObject] = ["path": correctPath(path)! as NSString, "include_media_info": NSNumber(value: true)]
+        let requestDictionary: [String: Any] = ["path": correctPath(path)!, "include_media_info": NSNumber(value: true)]
         request.httpBody = Data(jsonDictionary: requestDictionary)
         let task = session.dataTask(with: request, completionHandler: { (data, response, error) in
             var serverError: FileProviderHTTPError?
@@ -493,5 +427,84 @@ extension DropboxFileProvider: ExtendedFileProvider {
             completionHandler(dic, keys, serverError ?? error)
         })
         task.resume()
+        return nil
     }
+    
+    #if os(macOS) || os(iOS) || os(tvOS)
+    open func thumbnailOfFileSupported(path: String) -> Bool {
+        switch path.pathExtension.lowercased() {
+        case "jpg", "jpeg", "gif", "bmp", "png", "tif", "tiff":
+            return true
+        case "doc", "docx", "docm", "xls", "xlsx", "xlsm":
+            return false
+        case  "ppt", "pps", "ppsx", "ppsm", "pptx", "pptm":
+            return false
+        case "rtf":
+            return false
+        default:
+            return false
+        }
+    }
+    
+    /// Default value for dimension is 64x64, according to Dropbox documentation
+    @discardableResult
+    open func thumbnailOfFile(path: String, dimension: CGSize?, completionHandler: @escaping ((_ image: ImageClass?, _ error: Error?) -> Void)) -> Progress? {
+        let url: URL
+        let thumbAPI: Bool
+        switch path.pathExtension.lowercased() {
+        case "jpg", "jpeg", "gif", "bmp", "png", "tif", "tiff":
+            url = URL(string: "files/get_thumbnail", relativeTo: contentURL)!
+            thumbAPI = true
+        case "doc", "docx", "docm", "xls", "xlsx", "xlsm":
+            fallthrough
+        case  "ppt", "pps", "ppsx", "ppsm", "pptx", "pptm":
+            fallthrough
+        case "rtf":
+            url = URL(string: "files/get_preview", relativeTo: contentURL)!
+            thumbAPI = false
+        default:
+            return nil
+        }
+        var request = URLRequest(url: url)
+        request.setValue(authentication: credential, with: .oAuth2)
+        var requestDictionary: [String: Any] = ["path": path]
+        if thumbAPI {
+            requestDictionary["format"] = "jpeg"
+            let size: String
+            switch dimension?.height ?? 64 {
+            case 0...32:    size = "w32h32"
+            case 33...64:   size = "w64h64"
+            case 65...128:  size = "w128h128"
+            case 129...480: size = "w640h480"
+            default: size = "w1024h768"
+            }
+            requestDictionary["size"] = size
+        }
+        request.setValue(dropboxArgKey: requestDictionary)
+        let task = self.session.dataTask(with: request, completionHandler: { (data, response, error) in
+            var image: ImageClass? = nil
+            if let r = response as? HTTPURLResponse, let result = r.allHeaderFields["Dropbox-API-Result"] as? String, let jsonResult = result.deserializeJSON() {
+                if jsonResult["error"] != nil {
+                    completionHandler(nil, URLError(.cannotDecodeRawData, url: self.url(of: path)))
+                }
+            }
+            if let data = data {
+                if data.isPDF, let pageImage = DropboxFileProvider.convertToImage(pdfData: data, maxSize: dimension) {
+                    image = pageImage
+                } else if let contentType = (response as? HTTPURLResponse)?.allHeaderFields["Content-Type"] as? String, contentType.contains("text/html") {
+                     // TODO: Implement converting html returned type of get_preview to image
+                } else {
+                    if let dimension = dimension {
+                        image = DropboxFileProvider.scaleDown(data: data, toSize: dimension)
+                    } else {
+                        
+                    }
+                }
+            }
+            completionHandler(image, error)
+        })
+        task.resume()
+        return nil
+    }
+    #endif
 }

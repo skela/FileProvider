@@ -9,7 +9,7 @@
 import Foundation
 
 /// Containts path, url and attributes of a file or resource.
-open class FileObject: Equatable {
+open class FileObject: NSObject {
     /// A `Dictionary` contains file information,  using `URLResourceKey` keys.
     open internal(set) var allValues: [URLResourceKey: Any]
     
@@ -19,6 +19,7 @@ open class FileObject: Equatable {
     
     internal init(url: URL?, name: String, path: String) {
         self.allValues = [URLResourceKey: Any]()
+        super.init()
         if let url = url {
             self.url = url
         }
@@ -33,7 +34,10 @@ open class FileObject: Equatable {
             if let url = allValues[.fileURLKey] as? URL {
                 return url
             } else {
-                let path = self.path.addingPercentEncoding(withAllowedCharacters: .filePathAllowed) ?? self.path
+                var path = self.path.addingPercentEncoding(withAllowedCharacters: .filePathAllowed) ?? self.path
+                if path.hasPrefix("/") {
+                    path.remove(at: path.startIndex)
+                }
                 return URL(string: path) ?? URL(string: "/")!
             }
         }
@@ -147,28 +151,40 @@ open class FileObject: Equatable {
     open var isSymLink: Bool {
         return self.type == .symbolicLink
     }
-    
-    /// Check `FileObject` equality
-    public static func ==(lhs: FileObject, rhs: FileObject) -> Bool {
-        if rhs === lhs  {
-            return true
-        }
-        #if swift(>=3.1)
-        if Swift.type(of: lhs) != Swift.type(of: rhs) {
-            return false
-        }
+}
+
+extension FileObject {
+    open override var hash: Int {
+        #if swift(>=4.2)
+        var hasher = Hasher()
+        hasher.combine(url)
+        hasher.combine(size)
+        hasher.combine(modifiedDate)
+        return hasher.finalize()
         #else
-        if type(of: lhs) != type(of: rhs) {
-            return false
-        }
+        let hashURL =  self.url.hashValue
+        let hashSize = self.size.hashValue
+        return (hashURL << 7) &+ hashURL &+ hashSize
         #endif
-        
-        if let rurl = rhs.allValues[.fileURLKey] as? URL, let lurl = lhs.allValues[.fileURLKey] as? URL {
-            return rurl == lurl && rhs.size == lhs.size
-        }
-        return rhs.path == lhs.path && rhs.size == lhs.size && rhs.modifiedDate == lhs.modifiedDate
     }
     
+    open override func isEqual(_ object: Any?) -> Bool {
+        guard let object = object as? FileObject else { return false }
+        if self === object  {
+            return true
+        }
+        if Swift.type(of: self) != Swift.type(of: object) {
+            return false
+        }
+        
+        if let rurl = self.allValues[.fileURLKey] as? URL, let lurl = object.allValues[.fileURLKey] as? URL {
+            return rurl == lurl && self.size == object.size
+        }
+        return self.path == object.path && self.size == object.size && self.modifiedDate == object.modifiedDate
+    }
+}
+
+extension FileObject {
     internal func mapPredicate() -> [String: Any] {
         let mapDict: [URLResourceKey: String] = [.fileURLKey: "url", .nameKey: "name", .pathKey: "path",
                                                  .fileSizeKey: "fileSize", .creationDateKey: "creationDate",
@@ -207,6 +223,7 @@ open class FileObject: Equatable {
             case .and: return NSCompoundPredicate(andPredicateWithSubpredicates: newSub)
             case .not: return NSCompoundPredicate(notPredicateWithSubpredicate: newSub[0])
             case .or:  return NSCompoundPredicate(orPredicateWithSubpredicates: newSub)
+            @unknown default: fatalError()
             }
         } else if let cQuery = query as? NSComparisonPredicate {
             var newLeft = cQuery.leftExpression
@@ -225,7 +242,7 @@ open class FileObject: Equatable {
 }
 
 /// Containts attributes of a provider.
-open class VolumeObject {
+open class VolumeObject: NSObject {
     /// A `Dictionary` contains volume information,  using `URLResourceKey` keys.
     open internal(set) var allValues: [URLResourceKey: Any]
     
@@ -252,7 +269,16 @@ open class VolumeObject {
             allValues[.volumeNameKey] = newValue
         }
     }
-
+    
+    /// The root directory of the resource’s volume, returned as an `URL` object.
+    open internal(set) var uuid: String? {
+        get {
+            return allValues[.volumeUUIDStringKey] as? String
+        }
+        set {
+            allValues[.volumeUUIDStringKey] = newValue
+        }
+    }
     
     /// the volume’s capacity in bytes, return -1 if is undetermined.
     open internal(set) var totalCapacity: Int64 {
@@ -313,7 +339,6 @@ open class VolumeObject {
         }
     }
 }
-
 
 /// Sorting FileObject array by given criteria, **not thread-safe**
 public struct FileObjectSorting {
@@ -390,8 +415,8 @@ public struct FileObjectSorting {
             case .nameCaseInsensitive:
                 return ($0.name).localizedCaseInsensitiveCompare($1.name) == (ascending ? .orderedAscending : .orderedDescending)
             case .extension:
-                let kind1 = $0.isDirectory ? "folder" : ($0.path as NSString).pathExtension
-                let kind2 = $1.isDirectory ? "folder" : ($1.path as NSString).pathExtension
+                let kind1 = $0.isDirectory ? "folder" : $0.path.pathExtension
+                let kind2 = $1.isDirectory ? "folder" : $1.path.pathExtension
                 return kind1.localizedCaseInsensitiveCompare(kind2) == (ascending ? .orderedAscending : .orderedDescending)
             case .modifiedDate:
                 let fileMod1 = $0.modifiedDate ?? Date.distantPast

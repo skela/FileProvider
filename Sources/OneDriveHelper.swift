@@ -12,46 +12,49 @@ import Foundation
 public struct FileProviderOneDriveError: FileProviderHTTPError {
     public let code: FileProviderHTTPErrorCode
     public let path: String
-    public let errorDescription: String?
+    public let serverDescription: String?
 }
 
 /// Containts path, url and attributes of a OneDrive file or resource.
 public final class OneDriveFileObject: FileObject {
-    internal init(baseURL: URL?, name: String, path: String) {
-        let rpath = (URL(string:path)?.appendingPathComponent(name).absoluteString)!.replacingOccurrences(of: "/", with: "", options: .anchored)
-        let url = URL(string: rpath, relativeTo: baseURL) ?? URL(string: rpath)!
-        
-        super.init(url: url, name: name, path: rpath.removingPercentEncoding ?? path)
-    }
-    
     internal convenience init? (baseURL: URL?, route: OneDriveFileProvider.Route, jsonStr: String) {
         guard let json = jsonStr.deserializeJSON() else { return nil }
         self.init(baseURL: baseURL, route: route, json: json)
     }
     
-    internal convenience init? (baseURL: URL?, route: OneDriveFileProvider.Route, json: [String: AnyObject]) {
+    internal init? (baseURL: URL?, route: OneDriveFileProvider.Route, json: [String: Any]) {
         guard let name = json["name"] as? String else { return nil }
-        guard let path = json["parentReference"]?["path"] as? String else { return nil }
-        var lPath = path.replacingOccurrences(of: route.drivePath, with: "", options: .anchored, range: nil)
-        lPath = lPath.replacingOccurrences(of: "/:", with: "", options: .anchored)
-        lPath = lPath.replacingOccurrences(of: "//", with: "", options: .anchored)
-        self.init(baseURL: baseURL, name: name, path: lPath)
+        guard let id = json["id"] as? String else { return nil }
+        let path: String
+        if let refpath = (json["parentReference"] as? [String: Any])?["path"] as? String {
+            let parentPath: String
+            if let colonIndex = refpath.firstIndex(of: ":") {
+                parentPath = String(refpath[refpath.index(after: colonIndex)...])
+            } else {
+                parentPath = refpath
+            }
+             path = parentPath.appendingPathComponent(name)
+        } else {
+            path = "id:\(id)"
+        }
+        let url = baseURL.map { OneDriveFileObject.url(of: path, modifier: nil, baseURL: $0, route: route) }
+        super.init(url: url, name: name, path: path)
+        self.id = id
         self.size = (json["size"] as? NSNumber)?.int64Value ?? -1
-        self.childrensCount = json["folder"]?["childCount"] as? Int
+        self.childrensCount = (json["folder"] as? [String: Any])?["childCount"] as? Int
         self.modifiedDate = (json["lastModifiedDateTime"] as? String).flatMap { Date(rfcString: $0) }
         self.creationDate = (json["createdDateTime"] as? String).flatMap { Date(rfcString: $0) }
         self.type = json["folder"] != nil ? .directory : .regular
-        self.contentType = (json["file"]?["mimeType"] as? String).flatMap(ContentMIMEType.init(rawValue:)) ?? .stream
-        self.id = json["id"] as? String
+        self.contentType = ((json["file"] as? [String: Any])?["mimeType"] as? String).flatMap(ContentMIMEType.init(rawValue:)) ?? .stream
         self.entryTag = json["eTag"] as? String
-        let hashes = json["file"]?["hashes"] as? NSDictionary
+        let hashes = (json["file"] as? [String: Any])?["hashes"] as? [String: Any]
         // checks for both sha1 or quickXor. First is available in personal drives, second in business one.
-        self.hash = (hashes?["sha1Hash"] as? String) ?? (hashes?["quickXorHash"] as? String)
+        self.fileHash = (hashes?["sha1Hash"] as? String) ?? (hashes?["quickXorHash"] as? String)
     }
     
     /// The document identifier is a value assigned by the OneDrive to a file.
     /// This value is used to identify the document regardless of where it is moved on a volume.
-    open internal(set) var id: String? {
+    public internal(set) var id: String? {
         get {
             return allValues[.fileResourceIdentifierKey] as? String
         }
@@ -61,7 +64,7 @@ public final class OneDriveFileObject: FileObject {
     }
     
     /// MIME type of file contents returned by OneDrive server.
-    open internal(set) var contentType: ContentMIMEType {
+    public internal(set) var contentType: ContentMIMEType {
         get {
             return (allValues[.mimeTypeKey] as? String).flatMap(ContentMIMEType.init(rawValue:)) ?? .stream
         }
@@ -71,7 +74,7 @@ public final class OneDriveFileObject: FileObject {
     }
     
     /// HTTP E-Tag, can be used to mark changed files.
-    open internal(set) var entryTag: String? {
+    public internal(set) var entryTag: String? {
         get {
             return allValues[.entryTagKey] as? String
         }
@@ -81,7 +84,7 @@ public final class OneDriveFileObject: FileObject {
     }
     
     /// Calculated hash from OneDrive server. Hex string SHA1 in personal or Base65 string [QuickXOR](https://dev.onedrive.com/snippets/quickxorhash.htm) in business drives.
-    open internal(set) var hash: String? {
+    public internal(set) var fileHash: String? {
         get {
             return allValues[.documentIdentifierKey] as? String
         }
@@ -89,10 +92,63 @@ public final class OneDriveFileObject: FileObject {
             allValues[.documentIdentifierKey] = newValue
         }
     }
+    
+    static func url(of path: String, modifier: String?, baseURL: URL, route: OneDriveFileProvider.Route) -> URL {
+        var url: URL = baseURL
+        let isId = path.hasPrefix("id:")
+        var rpath: String = path.replacingOccurrences(of: "id:", with: "", options: .anchored)
+        
+        //url.appendPathComponent("v1.0")
+        url.appendPathComponent(route.drivePath)
+        
+        if rpath.isEmpty {
+            url.appendPathComponent("root")
+        } else if isId {
+            url.appendPathComponent("items")
+        } else {
+            url.appendPathComponent("root:")
+        }
+        
+        rpath = rpath.trimmingCharacters(in: pathTrimSet)
+        
+        switch (modifier == nil, rpath.isEmpty, isId) {
+        case (true, false, _):
+            url.appendPathComponent(rpath)
+        case (true, true, _):
+            break
+        case (false, true, _):
+            url.appendPathComponent(modifier!)
+        case (false, false, true):
+            url.appendPathComponent(rpath)
+            url.appendPathComponent(modifier!)
+        case (false, false, false):
+            url.appendPathComponent(rpath + ":")
+            url.appendPathComponent(modifier!)
+        }
+        
+        return url
+    }
+    
+    static func relativePathOf(url: URL, baseURL: URL?, route: OneDriveFileProvider.Route) -> String {
+        let base = baseURL?.appendingPathComponent(route.drivePath).path ?? ""
+        
+        let crudePath = url.path.replacingOccurrences(of: base, with: "", options: .anchored)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        
+        switch crudePath {
+        case hasPrefix("items/"):
+            let components = crudePath.components(separatedBy: "/")
+            return components.dropFirst().first.map { "id:\($0)" } ?? ""
+        case hasPrefix("root:"):
+            return crudePath.components(separatedBy: ":").dropFirst().first ?? ""
+        default:
+            return ""
+        }
+    }
 }
 
-internal extension OneDriveFileProvider {
-    internal func upload_multipart_data(_ targetPath: String, data: Data, operation: FileOperationType,
+extension OneDriveFileProvider {
+    func upload_multipart_data(_ targetPath: String, data: Data, operation: FileOperationType,
                                         overwrite: Bool, completionHandler: SimpleCompletionHandler) -> Progress? {
         return self.upload_multipart(targetPath, operation: operation, size: Int64(data.count), overwrite: overwrite, dataProvider: {
             let range = $0.clamped(to: 0..<Int64(data.count))
@@ -100,13 +156,13 @@ internal extension OneDriveFileProvider {
         }, completionHandler: completionHandler)
     }
     
-    internal func upload_multipart_file(_ targetPath: String, file: URL, operation: FileOperationType,
+    func upload_multipart_file(_ targetPath: String, file: URL, operation: FileOperationType,
                                         overwrite: Bool, completionHandler: SimpleCompletionHandler) -> Progress? {
         // upload task can't handle uploading file
         
         return self.upload_multipart(targetPath, operation: operation, size: file.fileSize, overwrite: overwrite, dataProvider: { range in
             guard let handle = FileHandle(forReadingAtPath: file.path) else {
-                throw self.cocoaError(targetPath, code: .fileNoSuchFile)
+                throw CocoaError(.fileNoSuchFile, path: targetPath)
             }
             
             defer {
@@ -116,7 +172,7 @@ internal extension OneDriveFileProvider {
             let offset = range.lowerBound
             handle.seek(toFileOffset: UInt64(offset))
             guard Int64(handle.offsetInFile) == offset else {
-                throw self.cocoaError(targetPath, code: .fileReadTooLarge)
+                throw CocoaError(.fileReadTooLarge, path: targetPath)
             }
             
             return handle.readData(ofLength: range.count)
@@ -135,6 +191,8 @@ internal extension OneDriveFileProvider {
         let createURL = self.url(of: targetPath, modifier: "createUploadSession")
         var createRequest = URLRequest(url: createURL)
         createRequest.httpMethod = "POST"
+        createRequest.setValue(authentication: self.credential, with: .oAuth2)
+        createRequest.setValue(contentType: .json)
         if overwrite {
             createRequest.httpBody = Data(jsonDictionary: ["item": ["@microsoft.graph.conflictBehavior": "replace"] as NSDictionary])
         } else {
@@ -148,7 +206,7 @@ internal extension OneDriveFileProvider {
             
             if let data = data, let json = data.deserializeJSON(),
                 let uploadURL = (json["uploadUrl"] as? String).flatMap(URL.init(string:)) {
-                self.upload_multipart(url: uploadURL, operation: operation, size: Int64(data.count), progress: progress, dataProvider: dataProvider, completionHandler: completionHandler)
+                self.upload_multipart(url: uploadURL, operation: operation, size: size, progress: progress, dataProvider: dataProvider, completionHandler: completionHandler)
             }
         }
         createSessionTask.resume()
@@ -159,11 +217,11 @@ internal extension OneDriveFileProvider {
     private func upload_multipart(url: URL, operation: FileOperationType, size: Int64, range: Range<Int64>? = nil, uploadedSoFar: Int64 = 0,
                                   progress: Progress, dataProvider: @escaping (Range<Int64>) throws -> Data, completionHandler: SimpleCompletionHandler) {
         guard !progress.isCancelled else { return }
-        var progress = progress
         
         let maximumSize: Int64 = 10_485_760 // Recommended by OneDrive documentations and divides evenly by 320 KiB, max 60MiB.
         var request = URLRequest(url: url)
         request.httpMethod = "PUT"
+        request.setValue(authentication: self.credential, with: .oAuth2)
         
         let finalRange: Range<Int64>
         if let range = range {
@@ -189,13 +247,13 @@ internal extension OneDriveFileProvider {
         }
         let task = session.uploadTask(with: request, from: data)
         
-        var dictionary: [String: AnyObject] = ["type": operation.description as NSString]
-        dictionary["source"] = operation.source as NSString?
-        dictionary["dest"] = operation.destination as NSString?
-        dictionary["uploadedBytes"] = uploadedSoFar as NSNumber
-        dictionary["totalBytes"] = data.count as NSNumber
+        var dictionary: [String: Any] = ["type": operation.description]
+        dictionary["source"] = operation.source
+        dictionary["dest"] = operation.destination
+        dictionary["uploadedBytes"] = NSNumber(value: uploadedSoFar)
+        dictionary["totalBytes"] = NSNumber(value: data.count)
         task.taskDescription = String(jsonDictionary: dictionary)
-        task.addObserver(self.sessionDelegate!, forKeyPath: #keyPath(URLSessionTask.countOfBytesSent), options: .new, context: &progress)
+        sessionDelegate?.observerProgress(of: task, using: progress, kind: .upload)
         progress.cancellationHandler = { [weak task, weak self] in
             task?.cancel()
             var deleteRequest = URLRequest(url: url)
@@ -276,7 +334,7 @@ internal extension OneDriveFileProvider {
         var keys = [String]()
         
         func add(key: String, value: Any?) {
-            if let value = value {
+            if let value = value, !((value as? String)?.isEmpty ?? false) {
                 keys.append(key)
                 dic[key] = value
             }
@@ -313,8 +371,17 @@ internal extension OneDriveFileProvider {
         
         if let audio = json["audio"] as? [String: Any] {
             for (key, value) in audio {
+                var value = value
                 if key == "bitrate" || key == "isVariableBitrate" { continue }
                 let casedKey = spaceCamelCase(key)
+                switch casedKey {
+                case "Duration":
+                    value = (value as? Int64).map { (TimeInterval($0) / 1000).formatshort } as Any
+                case "Bitrate":
+                    value = (value as? Int64).map { "\($0)kbps" } as Any
+                default:
+                    break
+                }
                 add(key: casedKey, value: value)
             }
         }

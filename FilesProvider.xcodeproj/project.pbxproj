@@ -60,6 +60,7 @@
 		7958155B1F478ED9003344DD /* HTTPFileProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 795815591F478ED9003344DD /* HTTPFileProvider.swift */; };
 		7958155C1F478ED9003344DD /* HTTPFileProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 795815591F478ED9003344DD /* HTTPFileProvider.swift */; };
 		798654331E8874BC002FA550 /* FTPHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 798654321E8874BC002FA550 /* FTPHelper.swift */; };
+		798D394020D01DA100FFB9EF /* CoreGraphics.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 798D393F20D01DA000FFB9EF /* CoreGraphics.framework */; };
 		799396AA1D48C02300086753 /* DropboxFileProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 799396931D48C02300086753 /* DropboxFileProvider.swift */; };
 		799396AB1D48C02300086753 /* DropboxFileProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 799396931D48C02300086753 /* DropboxFileProvider.swift */; };
 		799396AC1D48C02300086753 /* DropboxFileProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 799396931D48C02300086753 /* DropboxFileProvider.swift */; };
@@ -72,9 +73,6 @@
 		799396B91D48C02300086753 /* SMBFileProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 799396981D48C02300086753 /* SMBFileProvider.swift */; };
 		799396BA1D48C02300086753 /* SMBFileProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 799396981D48C02300086753 /* SMBFileProvider.swift */; };
 		799396BB1D48C02300086753 /* SMBFileProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 799396981D48C02300086753 /* SMBFileProvider.swift */; };
-		799396BC1D48C02300086753 /* CIFSTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7993969A1D48C02300086753 /* CIFSTypes.swift */; };
-		799396BD1D48C02300086753 /* CIFSTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7993969A1D48C02300086753 /* CIFSTypes.swift */; };
-		799396BE1D48C02300086753 /* CIFSTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7993969A1D48C02300086753 /* CIFSTypes.swift */; };
 		799396BF1D48C02300086753 /* SMB2DataTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7993969B1D48C02300086753 /* SMB2DataTypes.swift */; };
 		799396C01D48C02300086753 /* SMB2DataTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7993969B1D48C02300086753 /* SMB2DataTypes.swift */; };
 		799396C11D48C02300086753 /* SMB2DataTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7993969B1D48C02300086753 /* SMB2DataTypes.swift */; };
@@ -116,7 +114,6 @@
 		79BD63AC1E2CC2C20035128C /* ImageIO.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 79BD63AB1E2CC2C20035128C /* ImageIO.framework */; };
 		79BD63B01E2CC3300035128C /* libxml2.tbd in Frameworks */ = {isa = PBXBuildFile; fileRef = 79BD63AF1E2CC3300035128C /* libxml2.tbd */; };
 		79BD63B21E2CC3350035128C /* ImageIO.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 79BD63B11E2CC3350035128C /* ImageIO.framework */; };
-		79BD63B61E2CC3860035128C /* CoreFoundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 79BD63B51E2CC3860035128C /* CoreFoundation.framework */; };
 		79BD63B81E2CC38D0035128C /* AVFoundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 79BD63B71E2CC38D0035128C /* AVFoundation.framework */; };
 		79BD63BA1E2CC39B0035128C /* libxml2.tbd in Frameworks */ = {isa = PBXBuildFile; fileRef = 79BD63B91E2CC39B0035128C /* libxml2.tbd */; };
 		79BD63BE1E2CC3C20035128C /* ImageIO.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 79BD63BD1E2CC3C20035128C /* ImageIO.framework */; };
@@ -135,6 +132,9 @@
 		79F5745B1DFDB10B00179ABF /* FileObject.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79F5745A1DFDB10A00179ABF /* FileObject.swift */; };
 		79F5745C1DFDB10B00179ABF /* FileObject.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79F5745A1DFDB10A00179ABF /* FileObject.swift */; };
 		79F5745D1DFDB10B00179ABF /* FileObject.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79F5745A1DFDB10A00179ABF /* FileObject.swift */; };
+		CE27C49B219BFFA0000BE23C /* ServerTrustPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE27C498219BFFA0000BE23C /* ServerTrustPolicy.swift */; };
+		CE27C49C219C041E000BE23C /* ServerTrustPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE27C498219BFFA0000BE23C /* ServerTrustPolicy.swift */; };
+		CE27C49D219C041E000BE23C /* ServerTrustPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE27C498219BFFA0000BE23C /* ServerTrustPolicy.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -166,6 +166,7 @@
 		794C220D1D591A4B00EC49B8 /* SMB2QueryTypes.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = SMB2QueryTypes.swift; sourceTree = "<group>"; };
 		795815591F478ED9003344DD /* HTTPFileProvider.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = HTTPFileProvider.swift; sourceTree = "<group>"; };
 		798654321E8874BC002FA550 /* FTPHelper.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = FTPHelper.swift; sourceTree = "<group>"; };
+		798D393F20D01DA000FFB9EF /* CoreGraphics.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreGraphics.framework; path = System/Library/Frameworks/CoreGraphics.framework; sourceTree = SDKROOT; };
 		799396671D48B7F600086753 /* FilesProvider.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = FilesProvider.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		799396751D48B80D00086753 /* FilesProvider.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = FilesProvider.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		799396821D48B82700086753 /* FilesProvider.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = FilesProvider.framework; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -208,6 +209,7 @@
 		79D903531FAB647400D61D31 /* FilesProviderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FilesProviderTests.swift; sourceTree = "<group>"; };
 		79D903551FAB647400D61D31 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		79F5745A1DFDB10A00179ABF /* FileObject.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = FileObject.swift; sourceTree = "<group>"; };
+		CE27C498219BFFA0000BE23C /* ServerTrustPolicy.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ServerTrustPolicy.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -216,8 +218,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				79BD63AA1E2CC2BB0035128C /* AVFoundation.framework in Frameworks */,
-				79BD63AC1E2CC2C20035128C /* ImageIO.framework in Frameworks */,
 				79BD63A81E2CC2940035128C /* CoreGraphics.framework in Frameworks */,
+				79BD63AC1E2CC2C20035128C /* ImageIO.framework in Frameworks */,
 				791950F51DE58A5400B4426E /* libxml2.tbd in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -227,7 +229,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				79BD63B81E2CC38D0035128C /* AVFoundation.framework in Frameworks */,
-				79BD63B61E2CC3860035128C /* CoreFoundation.framework in Frameworks */,
+				798D394020D01DA100FFB9EF /* CoreGraphics.framework in Frameworks */,
 				79BD63B21E2CC3350035128C /* ImageIO.framework in Frameworks */,
 				79BD63B01E2CC3300035128C /* libxml2.tbd in Frameworks */,
 			);
@@ -258,6 +260,7 @@
 		791950F31DE58A5300B4426E /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
+				798D393F20D01DA000FFB9EF /* CoreGraphics.framework */,
 				79BD63C11E2CC3D30035128C /* AVFoundation.framework */,
 				79BD63BF1E2CC3CD0035128C /* CoreGraphics.framework */,
 				79BD63BD1E2CC3C20035128C /* ImageIO.framework */,
@@ -353,6 +356,7 @@
 				798654321E8874BC002FA550 /* FTPHelper.swift */,
 				799396971D48C02300086753 /* SMBClient.swift */,
 				799396981D48C02300086753 /* SMBFileProvider.swift */,
+				CE27C498219BFFA0000BE23C /* ServerTrustPolicy.swift */,
 			);
 			path = Sources;
 			sourceTree = "<group>";
@@ -499,7 +503,7 @@
 			isa = PBXProject;
 			attributes = {
 				LastSwiftUpdateCheck = 0910;
-				LastUpgradeCheck = 0900;
+				LastUpgradeCheck = 0930;
 				TargetAttributes = {
 					799396661D48B7F600086753 = {
 						CreatedOnToolsVersion = 7.3.1;
@@ -507,22 +511,25 @@
 					};
 					799396741D48B80D00086753 = {
 						CreatedOnToolsVersion = 7.3.1;
+						LastSwiftMigration = 1020;
 					};
 					799396811D48B82700086753 = {
 						CreatedOnToolsVersion = 7.3.1;
 					};
 					79D903501FAB647400D61D31 = {
 						CreatedOnToolsVersion = 9.1;
+						LastSwiftMigration = 1020;
 						ProvisioningStyle = Automatic;
 					};
 				};
 			};
 			buildConfigurationList = 7993965F1D48B7BF00086753 /* Build configuration list for PBXProject "FilesProvider" */;
 			compatibilityVersion = "Xcode 3.2";
-			developmentRegion = English;
+			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
 				en,
+				Base,
 			);
 			mainGroup = 7993965B1D48B7BF00086753;
 			productRefGroup = 799396681D48B7F600086753 /* Products */;
@@ -576,6 +583,7 @@
 				799396B31D48C02300086753 /* LocalFileProvider.swift in Sources */,
 				799396D41D48C02300086753 /* SMB2Tree.swift in Sources */,
 				7924B1A21D89DAE000589DB7 /* Options.swift in Sources */,
+				CE27C49D219C041E000BE23C /* ServerTrustPolicy.swift in Sources */,
 				792572411DF23BDA006A1526 /* LocalHelper.swift in Sources */,
 				7936BC121E880F5700A6C81C /* FTPFileProvider.swift in Sources */,
 				79480FF61E3ABDD0007E7275 /* CloudFileProvider.swift in Sources */,
@@ -593,7 +601,6 @@
 				799396B91D48C02300086753 /* SMBFileProvider.swift in Sources */,
 				794C220E1D591A4B00EC49B8 /* SMB2QueryTypes.swift in Sources */,
 				794C21FE1D58912A00EC49B8 /* DropboxHelper.swift in Sources */,
-				799396BC1D48C02300086753 /* CIFSTypes.swift in Sources */,
 				794C220A1D5893F800EC49B8 /* SMB2Notification.swift in Sources */,
 				799396D11D48C02300086753 /* SMB2SetInfo.swift in Sources */,
 				7924B1961D89DAE000589DB7 /* Document.swift in Sources */,
@@ -621,6 +628,7 @@
 				799396B41D48C02300086753 /* LocalFileProvider.swift in Sources */,
 				799396D51D48C02300086753 /* SMB2Tree.swift in Sources */,
 				7924B1A31D89DAE000589DB7 /* Options.swift in Sources */,
+				CE27C49C219C041E000BE23C /* ServerTrustPolicy.swift in Sources */,
 				792572421DF23BDA006A1526 /* LocalHelper.swift in Sources */,
 				7936BC131E880F5700A6C81C /* FTPFileProvider.swift in Sources */,
 				79480FF71E3ABDD0007E7275 /* CloudFileProvider.swift in Sources */,
@@ -638,7 +646,6 @@
 				799396BA1D48C02300086753 /* SMBFileProvider.swift in Sources */,
 				794C220F1D591A4B00EC49B8 /* SMB2QueryTypes.swift in Sources */,
 				794C21FF1D58912A00EC49B8 /* DropboxHelper.swift in Sources */,
-				799396BD1D48C02300086753 /* CIFSTypes.swift in Sources */,
 				794C220B1D5893F800EC49B8 /* SMB2Notification.swift in Sources */,
 				799396D21D48C02300086753 /* SMB2SetInfo.swift in Sources */,
 				7924B1971D89DAE000589DB7 /* Document.swift in Sources */,
@@ -666,6 +673,7 @@
 				799396B51D48C02300086753 /* LocalFileProvider.swift in Sources */,
 				799396D61D48C02300086753 /* SMB2Tree.swift in Sources */,
 				7924B1A41D89DAE000589DB7 /* Options.swift in Sources */,
+				CE27C49B219BFFA0000BE23C /* ServerTrustPolicy.swift in Sources */,
 				792572431DF23BDA006A1526 /* LocalHelper.swift in Sources */,
 				7936BC141E880F5700A6C81C /* FTPFileProvider.swift in Sources */,
 				79480FF81E3ABDD0007E7275 /* CloudFileProvider.swift in Sources */,
@@ -683,7 +691,6 @@
 				799396BB1D48C02300086753 /* SMBFileProvider.swift in Sources */,
 				794C22101D591A4B00EC49B8 /* SMB2QueryTypes.swift in Sources */,
 				794C22001D58912A00EC49B8 /* DropboxHelper.swift in Sources */,
-				799396BE1D48C02300086753 /* CIFSTypes.swift in Sources */,
 				794C220C1D5893F800EC49B8 /* SMB2Notification.swift in Sources */,
 				799396D31D48C02300086753 /* SMB2SetInfo.swift in Sources */,
 				7924B1981D89DAE000589DB7 /* Document.swift in Sources */,
@@ -726,16 +733,18 @@
 		799396601D48B7BF00086753 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				BUNDLE_VERSION_STRING = 0.22.0;
+				BUNDLE_VERSION_STRING = 0.25.1;
 				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
 				CLANG_WARN_BOOL_CONVERSION = YES;
 				CLANG_WARN_COMMA = YES;
 				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
 				CLANG_WARN_EMPTY_BODY = YES;
 				CLANG_WARN_ENUM_CONVERSION = YES;
 				CLANG_WARN_INFINITE_RECURSION = YES;
 				CLANG_WARN_INT_CONVERSION = YES;
 				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
 				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
 				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
 				CLANG_WARN_STRICT_PROTOTYPES = YES;
@@ -744,7 +753,6 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = dwarf;
-				ENABLE_BITCODE = YES;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
 				GCC_NO_COMMON_BLOCKS = YES;
@@ -765,16 +773,18 @@
 		799396611D48B7BF00086753 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				BUNDLE_VERSION_STRING = 0.22.0;
+				BUNDLE_VERSION_STRING = 0.25.1;
 				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
 				CLANG_WARN_BOOL_CONVERSION = YES;
 				CLANG_WARN_COMMA = YES;
 				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
 				CLANG_WARN_EMPTY_BODY = YES;
 				CLANG_WARN_ENUM_CONVERSION = YES;
 				CLANG_WARN_INFINITE_RECURSION = YES;
 				CLANG_WARN_INT_CONVERSION = YES;
 				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
 				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
 				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
 				CLANG_WARN_STRICT_PROTOTYPES = YES;
@@ -782,7 +792,6 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
-				ENABLE_BITCODE = YES;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				GCC_NO_COMMON_BLOCKS = YES;
 				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
@@ -826,6 +835,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = "com.mousavian.FilesProvider-iOS";
 				SDKROOT = iphoneos;
 				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 4.2;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				VERSIONING_SYSTEM = "apple-generic";
 				VERSION_INFO_PREFIX = "";
@@ -856,6 +866,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = "com.mousavian.FilesProvider-iOS";
 				SDKROOT = iphoneos;
 				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 4.2;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				VALIDATE_PRODUCT = YES;
 				VERSIONING_SYSTEM = "apple-generic";
@@ -879,7 +890,6 @@
 				DYLIB_COMPATIBILITY_VERSION = 1;
 				DYLIB_CURRENT_VERSION = 1;
 				DYLIB_INSTALL_NAME_BASE = "@rpath";
-				ENABLE_BITCODE = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
 				FRAMEWORK_VERSION = A;
@@ -897,6 +907,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = "com.mousavian.FilesProvider-OSX";
 				SDKROOT = macosx;
 				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 5.0;
 				VERSIONING_SYSTEM = "apple-generic";
 				VERSION_INFO_PREFIX = "";
 			};
@@ -918,7 +929,6 @@
 				DYLIB_COMPATIBILITY_VERSION = 1;
 				DYLIB_CURRENT_VERSION = 1;
 				DYLIB_INSTALL_NAME_BASE = "@rpath";
-				ENABLE_BITCODE = NO;
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				FRAMEWORK_VERSION = A;
@@ -931,6 +941,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = "com.mousavian.FilesProvider-OSX";
 				SDKROOT = macosx;
 				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 5.0;
 				VERSIONING_SYSTEM = "apple-generic";
 				VERSION_INFO_PREFIX = "";
 			};
@@ -967,6 +978,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = "com.mousavian.FilesProvider-tvOS";
 				SDKROOT = appletvos;
 				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 4.2;
 				TARGETED_DEVICE_FAMILY = 3;
 				TVOS_DEPLOYMENT_TARGET = 10.0;
 				VERSIONING_SYSTEM = "apple-generic";
@@ -1000,6 +1012,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = "com.mousavian.FilesProvider-tvOS";
 				SDKROOT = appletvos;
 				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 4.2;
 				TARGETED_DEVICE_FAMILY = 3;
 				TVOS_DEPLOYMENT_TARGET = 10.0;
 				VALIDATE_PRODUCT = YES;
@@ -1025,7 +1038,6 @@
 				CODE_SIGN_IDENTITY = "-";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				ENABLE_BITCODE = NO;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
 				GCC_DYNAMIC_NO_PIC = NO;
 				GCC_PREPROCESSOR_DEFINITIONS = (
@@ -1042,6 +1054,7 @@
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_VERSION = 5.0;
 			};
 			name = Debug;
 		};
@@ -1063,7 +1076,6 @@
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				COPY_PHASE_STRIP = NO;
-				ENABLE_BITCODE = NO;
 				ENABLE_NS_ASSERTIONS = NO;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
 				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
@@ -1075,6 +1087,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.mousavian.FilesProviderTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;
+				SWIFT_VERSION = 5.0;
 			};
 			name = Release;
 		};

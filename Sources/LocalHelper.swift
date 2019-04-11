@@ -17,12 +17,19 @@ public final class LocalFileObject: FileObject {
     /// Initiates a `LocalFileObject` with attributes of file in path.
     public convenience init? (fileWithPath path: String, relativeTo relativeURL: URL?) {
         var fileURL: URL?
-        var rpath = path.replacingOccurrences(of: relativeURL?.path ?? "", with: "", options: .anchored).replacingOccurrences(of: "/", with: "", options: .anchored)
+        var rpath = path.replacingOccurrences(of: "/", with: "", options: .anchored)
+        var resolvedRelativeURL: URL?
+        if let relPath = relativeURL?.path.replacingOccurrences(of: "/", with: "", options: .anchored), rpath.hasPrefix(relPath) {
+            rpath = rpath.replacingOccurrences(of: relPath, with: "", options: .anchored).replacingOccurrences(of: "/", with: "", options: .anchored)
+            resolvedRelativeURL = relativeURL
+        } else {
+            resolvedRelativeURL = relativeURL
+        }
         if #available(iOS 9.0, macOS 10.11, *) {
-            fileURL = URL(fileURLWithPath: rpath, relativeTo: relativeURL)
+            fileURL = URL(fileURLWithPath: rpath, relativeTo: resolvedRelativeURL)
         } else {
             rpath = rpath.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? rpath
-            fileURL = URL(string: rpath, relativeTo: relativeURL) ?? relativeURL
+            fileURL = URL(string: rpath, relativeTo: resolvedRelativeURL) ?? resolvedRelativeURL
         }
         
         if let fileURL = fileURL {
@@ -48,7 +55,7 @@ public final class LocalFileObject: FileObject {
     }
     
     /// The total size allocated on disk for the file
-    open internal(set) var allocatedSize: Int64 {
+    public internal(set) var allocatedSize: Int64 {
         get {
             return allValues[.fileAllocatedSizeKey] as? Int64 ?? 0
         }
@@ -60,7 +67,7 @@ public final class LocalFileObject: FileObject {
     /// The document identifier is a value assigned by the kernel/system to a file or directory. 
     /// This value is used to identify the document regardless of where it is moved on a volume. 
     /// The identifier persists across system restarts.
-    open internal(set) var id: Int? {
+    public internal(set) var id: Int? {
         get {
             return allValues[.documentIdentifierKey] as? Int
         }
@@ -71,7 +78,7 @@ public final class LocalFileObject: FileObject {
     
     /// The revision of file, which changes when a file contents are modified. 
     /// Changes to attributes or other file metadata do not change the identifier.
-    open var rev: String? {
+    public var rev: String? {
         get {
             let data = allValues[.generationIdentifierKey] as? Data
             return data?.map { String(format: "%02hhx", $0) }.joined()
@@ -79,7 +86,7 @@ public final class LocalFileObject: FileObject {
     }
     
     /// Count of children items of a driectory. It costs disk access for local directories.
-    open public(set) override var childrensCount: Int? {
+    public override var childrensCount: Int? {
         get {
             return try? FileManager.default.contentsOfDirectory(atPath: self.url.path).count
         }
@@ -89,24 +96,49 @@ public final class LocalFileObject: FileObject {
     }
 }
 
-internal final class LocalFolderMonitor {
+public final class LocalFileMonitor {
     fileprivate let source: DispatchSourceFileSystemObject
     fileprivate let descriptor: CInt
     fileprivate let qq: DispatchQueue = DispatchQueue.global(qos: .default)
     fileprivate var state: Bool = false
-    fileprivate var monitoredTime: TimeInterval = Date().timeIntervalSinceReferenceDate
-    var url: URL
+    
+    fileprivate var _monitoredTime: TimeInterval = Date().timeIntervalSinceReferenceDate
+    fileprivate let _monitoredTimeLock = NSLock()
+    fileprivate var monitoredTime: TimeInterval {
+        get {
+            _monitoredTimeLock.lock()
+            defer {
+                _monitoredTimeLock.unlock()
+            }
+            return _monitoredTime
+        }
+        set {
+            _monitoredTimeLock.lock()
+            defer {
+                _monitoredTimeLock.unlock()
+            }
+            _monitoredTime = newValue
+        }
+    }
+    
+    public var url: URL
     
     /// Creates a folder monitor object with monitoring enabled.
-    init(url: URL, handler: @escaping ()->Void) {
+    public init?(url: URL, handler: @escaping ()->Void) {
         self.url = url
-        descriptor = open((url as NSURL).fileSystemRepresentation, O_EVTONLY)
-        source = DispatchSource.makeFileSystemObjectSource(fileDescriptor: descriptor, eventMask: .write, queue: qq)
+        descriptor = url.absoluteURL.withUnsafeFileSystemRepresentation { rep in
+            guard let rep = rep else { return -1 }
+            return open(rep, O_EVTONLY)
+        }
+        guard descriptor >= 0 else { return nil }
+        let event: DispatchSource.FileSystemEvent = url.fileIsDirectory ? [.write] : .all
+        source = DispatchSource.makeFileSystemObjectSource(fileDescriptor: descriptor, eventMask: event, queue: qq)
+        
         // Folder monitoring is recursive and deep. Monitoring a root folder may be very costly
         // We have a 0.2 second delay to ensure we wont call handler 1000s times when there is
         // a huge file operation. This ensures app will work smoothly while this 250 milisec won't
         // affect user experince much
-        let main_handler: ()->Void = { [weak self] in
+        let main_handler: DispatchSourceProtocol.DispatchSourceHandler = { [weak self] in
             guard let `self` = self else { return }
             if Date().timeIntervalSinceReferenceDate < self.monitoredTime + 0.2 {
                 return
@@ -126,7 +158,7 @@ internal final class LocalFolderMonitor {
     }
     
     /// Starts sending notifications if currently stopped
-    func start() {
+    public func start() {
         if !state {
             state = true
             source.resume()
@@ -134,7 +166,7 @@ internal final class LocalFolderMonitor {
     }
     
     /// Stops sending notifications if currently enabled
-    func stop() {
+    public func stop() {
         if state {
             state = false
             source.suspend()
@@ -221,17 +253,5 @@ internal class LocalFileProviderManagerDelegate: NSObject, FileManagerDelegate {
         let srcPath = provider.relativePathOf(url: srcURL)
         let dstPath = provider.relativePathOf(url: dstURL)
         return delegate.fileProvider(provider, shouldProceedAfterError: error, operation: .link(link: srcPath, target: dstPath))
-    }
-}
-
-class UndoBox: NSObject {
-    weak var provider: FileProvideUndoable?
-    let operation: FileOperationType
-    let undoOperation: FileOperationType
-    
-    init(provider: FileProvideUndoable, operation: FileOperationType, undoOperation: FileOperationType) {
-        self.provider = provider
-        self.operation = operation
-        self.undoOperation = undoOperation
     }
 }

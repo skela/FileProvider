@@ -8,6 +8,22 @@
 
 import Foundation
 
+protocol Option: RawRepresentable, Hashable {
+    
+}
+
+extension Option where RawValue: Hashable {
+    var hashValue: Int {
+        return rawValue.hashValue
+    }
+}
+
+extension Option where RawValue: Equatable {
+    static func ==(lhs: Self, rhs: Self) -> Bool {
+        return lhs.rawValue == rhs.rawValue
+    }
+}
+
 protocol SMBRequestBody {
     static var command: SMB2.Command { get }
     func data() -> Data
@@ -15,11 +31,7 @@ protocol SMBRequestBody {
 
 extension SMBRequestBody {
     var command: SMB2.Command {
-        #if swift(>=3.1)
-            return Swift.type(of: self).command
-        #else
-            return type(of: self).command
-        #endif
+        return Swift.type(of: self).command
     }
     
     func data() -> Data {
